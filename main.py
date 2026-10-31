@@ -15,11 +15,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# 0=Lunedì, 1=Martedì, 2=Mercoledì, 3=Giovedì, 4=Venerdì, 5=Sabato, 6=Domenica
+# CALENDARIO ESTRAZIONI (0=Lun, 1=Mar, 2=Mer, 3=Gio, 4=Ven, 5=Sab, 6=Dom)
 DRAW_DAYS = {
-    "eurojackpot": [1, 4],             # Martedì, Venerdì
-    "superenalotto": [1, 3, 4, 5],     # Martedì, Giovedì, Venerdì, Sabato
-    "vinci_vita": [0, 1, 2, 3, 4, 5, 6] # Tutti i giorni
+    "eurojackpot": [1, 4],                 # Martedì e Venerdì
+    "superenalotto": [1, 3, 4, 5],         # Martedì, Giovedì, Venerdì, Sabato
+    "vinci_vita": [0, 1, 2, 3, 4, 5, 6]    # Tutti i giorni (incluso Giovedì)
 }
 
 def send_telegram(msg):
@@ -60,7 +60,8 @@ def run():
         giocate_oggi += 1
         decision, ev = get_decision(game, jackpot)
         
-        if decision == "SKIP":
+        # Con il nuovo omega_brain, decision sarà sempre PLAY_MAX
+        if decision == "SKIP" and game != "eurojackpot":
             report += f"🛑 *{game.upper()}*\nEV: `{ev}` · **SKIP**\nNon giocare. Statisticamente svantaggioso.\n\n"
             pwa_data["games"][game] = {"status": "SKIP", "ev": ev}
             continue
@@ -72,7 +73,7 @@ def run():
         if euros: 
             num_str += "  |  ⭐ " + "-".join(map(str, euros))
         
-        report += f"✅ *{game.upper()}*\nEV: `{ev}`\n🎯 `{num_str}`\n\n"
+        report += f"✅ *{game.upper()}*\n🎯 `{num_str}`\n\n"
         pwa_data["games"][game] = {
             "status": "PLAY", 
             "ev": ev,
