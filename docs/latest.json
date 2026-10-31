@@ -7,20 +7,29 @@
         },
         "superenalotto": {
             "status": "PLAY",
-            "ev": -0.5858,
+            "ev": 0.0,
             "mains": [
+                24,
                 33,
-                40,
-                48,
-                50,
+                42,
                 52,
-                81
+                62,
+                64
             ],
             "euros": []
         },
-        "vinci_vita": {
-            "status": "SKIP",
-            "ev": -1.6442
+        "swfl": {
+            "status": "PLAY",
+            "ev": 0.0,
+            "mains": [
+                2,
+                12,
+                32,
+                39,
+                48,
+                57
+            ],
+            "euros": []
         }
     }
 }
