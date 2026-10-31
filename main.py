@@ -29,7 +29,7 @@ def run():
     fetch_superenalotto()
     fetch_vinci()
 
-    # 2. Jackpot attuali (stime di test)
+    # Jackpot attuali (stime)
     jackpots = {
         "eurojackpot": 120_000_000, 
         "superenalotto": 45_000_000, 
