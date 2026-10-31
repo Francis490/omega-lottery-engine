@@ -2,15 +2,25 @@ import os
 import requests
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
+
 from database import init_db, get_recent
 from fetcher import fetch_eurojackpot, fetch_superenalotto, fetch_vinci
 from omega_brain import get_decision, generate_ticket
+from jackpot_fetcher import get_all_jackpots
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+# 0=Lunedì, 1=Martedì, 2=Mercoledì, 3=Giovedì, 4=Venerdì, 5=Sabato, 6=Domenica
+DRAW_DAYS = {
+    "eurojackpot": [1, 4],             # Martedì, Venerdì
+    "superenalotto": [1, 3, 4, 5],     # Martedì, Giovedì, Venerdì, Sabato
+    "vinci_vita": [0, 1, 2, 3, 4, 5, 6] # Tutti i giorni
+}
 
 def send_telegram(msg):
     if TOKEN and CHAT_ID:
@@ -24,27 +34,34 @@ def run():
     logging.info("Avvio Omega Engine...")
     init_db()
     
-    # 1. Fetch di tutti i giochi
+    # 1. Fetch di tutti i giochi per mantenere il DB aggiornato
     fetch_eurojackpot()
     fetch_superenalotto()
     fetch_vinci()
 
-    # Jackpot attuali (stime)
-    jackpots = {
-        "eurojackpot": 120_000_000, 
-        "superenalotto": 45_000_000, 
-        "vinci_vita": 2_500_000
-    }
+    # 2. Recupero AUTOMATICO dei jackpot reali
+    logging.info("Recupero jackpot in corso...")
+    jackpots = get_all_jackpots()
     
-    report = "🧠 *OMEGA ENGINE - ANALISI QUANTITATIVA*\n\n"
+    oggi = datetime.now().weekday()
+    day_names = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
+    
+    report = f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}*\n\n"
     pwa_data = {"timestamp": "Ultimo aggiornamento", "games": {}}
+    giocate_oggi = 0
 
-    # 3. Elaborazione di ogni gioco
+    # 3. Elaborazione intelligente per ogni gioco
     for game, jackpot in jackpots.items():
+        # Controlla se oggi si estrae questo gioco
+        if oggi not in DRAW_DAYS[game]:
+            pwa_data["games"][game] = {"status": "NO_DRAW", "ev": 0}
+            continue
+            
+        giocate_oggi += 1
         decision, ev = get_decision(game, jackpot)
         
         if decision == "SKIP":
-            report += f"🛑 *{game.upper()}*\nEV: `{ev}` · Decisione: **SKIP**\nNon giocare. Statisticamente svantaggioso.\n\n"
+            report += f"🛑 *{game.upper()}*\nEV: `{ev}` · **SKIP**\nNon giocare. Statisticamente svantaggioso.\n\n"
             pwa_data["games"][game] = {"status": "SKIP", "ev": ev}
             continue
             
@@ -63,12 +80,15 @@ def run():
             "euros": euros
         }
 
+    if giocate_oggi == 0:
+        report += "Nessuna estrazione prevista per oggi. Riposo."
+
     # 4. Salva per la PWA (GitHub Pages)
     Path("docs").mkdir(exist_ok=True)
     with open("docs/latest.json", "w") as f:
         json.dump(pwa_data, f, indent=4)
 
-    # 5. Invia il report
+    # 5. Invia il report finale
     send_telegram(report)
     logging.info("Ciclo Omega completato con successo.")
 
