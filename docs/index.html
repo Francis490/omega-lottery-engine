@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omega Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #0a0612; --card: rgba(21, 11, 31, 0.75); --venus: #c026d3; --vortex: #06b6d4; --solar: #fbbf24; --text: #f1e8ff; }
+        body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { background: linear-gradient(90deg, var(--venus), var(--vortex)); -webkit-background-clip: text; color: transparent; letter-spacing: 2px; }
+        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
+        .card { background: var(--card); border: 1px solid rgba(192, 38, 211, 0.3); border-radius: 12px; padding: 20px; }
+        .card h2 { margin: 0 0 10px 0; font-size: 1.2rem; color: var(--vortex); }
+        .ev { font-size: 0.9rem; color: #a89bbd; margin-bottom: 15px; }
+        .balls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .ball { width: 45px; height: 45px; border-radius: 50%; background: #150b1f; border: 1px solid var(--venus); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; font-size: 1.1rem; }
+        .ball.euro { border-color: var(--solar); color: var(--solar); }
+        .skip { color: #ef4444; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>OMEGA ENGINE</h1>
+    <div class="container" id="dashboard">Caricamento dati...</div>
+
+    <script>
+        fetch('latest.json')
+            .then(res => res.json())
+            .then(data => {
+                const dash = document.getElementById('dashboard');
+                dash.innerHTML = '';
+                
+                for (const [game, info] of Object.entries(data.games)) {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    
+                    let html = `<h2>${game.toUpperCase()}</h2>`;
+                    html += `<div class="ev">Expected Value (EV): <strong>${info.ev}</strong></div>`;
+                    
+                    if (info.status === 'SKIP') {
+                        html += `<div class="skip">🛑 SKIP - Non giocare</div>`;
+                    } else {
+                        html += `<div class="balls">`;
+                        info.mains.forEach(n => html += `<div class="ball">${n}</div>`);
+                        if (info.euros && info.euros.length > 0) {
+                            info.euros.forEach(n => html += `<div class="ball euro">${n}</div>`);
+                        }
+                        html += `</div>`;
+                    }
+                    card.innerHTML = html;
+                    dash.appendChild(card);
+                }
+            })
+            .catch(err => {
+                document.getElementById('dashboard').innerHTML = "Errore nel caricamento. Esegui il bot prima.";
+            });
+    </script>
+</body>
+</html>
