@@ -31,7 +31,15 @@ def save_vv(draw: VinciDraw):
         conn.commit()
 
 def get_recent(game: str, limit=15) -> list:
+    # Mappiamo il nome del gioco al nome della tabella
+    table_map = {
+        "eurojackpot": "ej",
+        "superenalotto": "se",
+        "vinci_vita": "vv"
+    }
+    table_name = table_map.get(game, "ej")
+    
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(f"SELECT * FROM {game} ORDER BY date DESC LIMIT ?", (limit,)).fetchall()
+        rows = conn.execute(f"SELECT * FROM {table_name} ORDER BY date DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
