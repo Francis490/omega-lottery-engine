@@ -2,15 +2,15 @@ name: Omega Engine Automazione
 
 on:
   schedule:
-    # Si sveglia il Mercoledì e il Sabato alle 08:00 UTC
-    - cron: '0 8 * * 3,6'
+    # Gira tutti i giorni alle 12:00 UTC (14:00 in Italia)
+    - cron: '0 12 * * *'
   workflow_dispatch: # Permette di avviarlo a mano
 
 jobs:
   run-omega:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Necessario per aggiornare la PWA
+      contents: write
 
     steps:
       - name: Checkout codice
