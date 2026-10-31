@@ -8,10 +8,35 @@ logger = logging.getLogger(__name__)
 DEFAULT_JACKPOTS = {
     "eurojackpot": 30_000_000,
     "superenalotto": 40_000_000,
-    "swfl": 2_500_000 # Nome aggiornato
+    "swfl": 2_500_000
 }
 
-# ... (le funzioni fetch_eurojackpot_jackpot e fetch_superenalotto_jackpot rimangono identiche) ...
+def fetch_eurojackpot_jackpot():
+    try:
+        res = requests.get("https://www.multipasko.pl/widget-wyniki.php?format=json", timeout=15)
+        data = res.json()
+        jackpot_str = data.get("g", {}).get("eurojackpot", {}).get("j")
+        if jackpot_str:
+            jackpot = int(re.sub(r"[^\d]", "", str(jackpot_str)))
+            logger.info(f"Eurojackpot Jackpot recuperato: {jackpot} €")
+            return jackpot
+    except Exception as e:
+        logger.warning(f"Impossibile recuperare il jackpot Eurojackpot: {e}")
+    return None
+
+def fetch_superenalotto_jackpot():
+    try:
+        res = requests.get("https://www.lottologia.com/superenalotto/estrazioni/", timeout=15)
+        soup = BeautifulSoup(res.text, "lxml")
+        text = soup.get_text(" ", strip=True)
+        match = re.search(r"montepremi[:\s]*([\d\.]+)", text, re.IGNORECASE)
+        if match:
+            jackpot = int(re.sub(r"[^\d]", "", match.group(1)))
+            logger.info(f"Superenalotto Jackpot recuperato: {jackpot} €")
+            return jackpot
+    except Exception as e:
+        logger.warning(f"Impossibile recuperare il jackpot Superenalotto: {e}")
+    return None
 
 def fetch_vinci_jackpot():
     try:
@@ -35,7 +60,7 @@ def get_all_jackpots():
     jackpots = {
         "eurojackpot": fetch_eurojackpot_jackpot() or DEFAULT_JACKPOTS["eurojackpot"],
         "superenalotto": fetch_superenalotto_jackpot() or DEFAULT_JACKPOTS["superenalotto"],
-        "swfl": fetch_vinci_jackpot() or DEFAULT_JACKPOTS["swfl"] # Nome aggiornato
+        "swfl": fetch_vinci_jackpot() or DEFAULT_JACKPOTS["swfl"]
     }
     logger.info(f"Jackpot finali in uso: {jackpots}")
     return jackpots
