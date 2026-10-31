@@ -21,6 +21,16 @@ def calculate_ev(game, jackpot):
     
     return round(ev_jackpot + ev_other - cost, 4)
 
+def get_decision(game, jackpot):
+    """Questa è la funzione che mancava!"""
+    ev = calculate_ev(game, jackpot)
+    if ev < -0.7:
+        return "SKIP", ev
+    elif ev < -0.3:
+        return "PLAY_MIN", ev
+    else:
+        return "PLAY_MAX", ev
+
 def generate_ticket(game, recent_draws, seed=42):
     random.seed(seed)
     is_ej = (game == "eurojackpot")
@@ -36,11 +46,11 @@ def generate_ticket(game, recent_draws, seed=42):
     # 2. Logica Anti-Crowd: Numeri alti (> 31 per evitare compleanni), no multipli di 7
     pool = [n for n in range(32, max_pool + 1) if n not in recent_nums and n % 7 != 0]
     
-    # Fallback di sicurezza: se abbiamo pochi numeri, allentiamo il filtro
+    # Fallback di sicurezza
     if len(pool) < (5 if is_ej else 6):
         pool = [n for n in range(32, max_pool + 1) if n % 7 != 0]
 
-    # 3. Euronumeri (solo per Eurojackpot: range 1-12, evitiamo 1, 7, 12)
+    # 3. Euronumeri
     if is_ej:
         recent_euros = set()
         for d in recent_draws:
@@ -53,5 +63,4 @@ def generate_ticket(game, recent_draws, seed=42):
             
         return sorted(random.sample(pool, 5)), sorted(random.sample(euro_pool, 2))
     
-    # Superenalotto e Vinci
     return sorted(random.sample(pool, 6)), []
