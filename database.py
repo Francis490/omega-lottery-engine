@@ -9,6 +9,7 @@ def init_db():
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("CREATE TABLE IF NOT EXISTS ej (date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, e1 INT, e2 INT)")
         conn.execute("CREATE TABLE IF NOT EXISTS se (date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT)")
+        # La tabella del database rimane 'vv' per non perdere i dati, ma la mappatura sotto cambia
         conn.execute("CREATE TABLE IF NOT EXISTS vv (date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT, n7 INT, n8 INT)")
         conn.commit()
 
@@ -31,11 +32,10 @@ def save_vv(draw: VinciDraw):
         conn.commit()
 
 def get_recent(game: str, limit=15) -> list:
-    # Mappiamo il nome del gioco al nome della tabella
     table_map = {
         "eurojackpot": "ej",
         "superenalotto": "se",
-        "vinci_vita": "vv"
+        "swfl": "vv" # Mappato 'swfl' alla tabella 'vv'
     }
     table_name = table_map.get(game, "ej")
     
