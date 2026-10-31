@@ -1,0 +1,26 @@
+{
+    "timestamp": "Ultimo aggiornamento",
+    "games": {
+        "eurojackpot": {
+            "status": "SKIP",
+            "ev": -0.7919
+        },
+        "superenalotto": {
+            "status": "PLAY",
+            "ev": -0.5777,
+            "mains": [
+                33,
+                40,
+                50,
+                52,
+                79,
+                87
+            ],
+            "euros": []
+        },
+        "vinci_vita": {
+            "status": "SKIP",
+            "ev": -1.646
+        }
+    }
+}
