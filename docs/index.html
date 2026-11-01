@@ -12,7 +12,6 @@
         .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
         .card { background: var(--card); border: 1px solid rgba(192, 38, 211, 0.3); border-radius: 12px; padding: 20px; }
         .card h2 { margin: 0 0 10px 0; font-size: 1.2rem; color: var(--vortex); }
-        .ev { font-size: 0.9rem; color: #a89bbd; margin-bottom: 15px; }
         .balls { display: flex; gap: 10px; flex-wrap: wrap; }
         .ball { width: 45px; height: 45px; border-radius: 50%; background: #150b1f; border: 1px solid var(--venus); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; font-size: 1.1rem; }
         .ball.euro { border-color: var(--solar); color: var(--solar); }
@@ -35,9 +34,10 @@
                     card.className = 'card';
                     
                     let html = `<h2>${game.toUpperCase()}</h2>`;
-                    html += `<div class="ev">Expected Value (EV): <strong>${info.ev}</strong></div>`;
                     
-                    if (info.status === 'SKIP') {
+                    if (info.status === 'NO_DRAW') {
+                        html += `<div style="color: #a89bbd;">Nessuna estrazione oggi.</div>`;
+                    } else if (info.status === 'SKIP') {
                         html += `<div class="skip">🛑 SKIP - Non giocare</div>`;
                     } else {
                         html += `<div class="balls">`;
