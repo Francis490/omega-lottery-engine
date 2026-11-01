@@ -6,28 +6,19 @@
             "ev": 0
         },
         "superenalotto": {
-            "status": "PLAY",
-            "ev": 0.0,
-            "mains": [
-                6,
-                10,
-                31,
-                40,
-                49,
-                66
-            ],
-            "euros": []
+            "status": "NO_DRAW",
+            "ev": 0
         },
         "swfl": {
             "status": "PLAY",
             "ev": 0.0,
             "mains": [
                 6,
-                10,
-                31,
-                40,
-                49,
-                66
+                8,
+                12,
+                15,
+                51,
+                89
             ],
             "euros": []
         }
