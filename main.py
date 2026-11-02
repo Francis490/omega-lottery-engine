@@ -15,14 +15,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Calendario aggiornato con SWFL
+# Calendario estrazioni (0=Lun, 1=Mar, 2=Mer, 3=Gio, 4=Ven, 5=Sab, 6=Dom)
 DRAW_DAYS = {
-    "eurojackpot": [1, 4],                 
-    "superenalotto": [1, 3, 4, 5],         
-    "swfl": [0, 1, 2, 3, 4, 5, 6]    
+    "eurojackpot": [1, 4],                 # Martedì, Venerdì
+    "superenalotto": [1, 3, 4, 5],         # Martedì, Giovedì, Venerdì, Sabato
+    "swfl": [0, 1, 2, 3, 4, 5, 6]          # Tutti i giorni
 }
 
-# Nomi per il messaggio di Telegram
 DISPLAY_NAMES = {
     "eurojackpot": "EUROJACKPOT",
     "superenalotto": "SUPERENALOTTO",
@@ -41,6 +40,7 @@ def run():
     logging.info("Avvio Omega Engine...")
     init_db()
     
+    # Fetch di tutti i giochi
     fetch_eurojackpot()
     fetch_superenalotto()
     fetch_vinci()
@@ -63,14 +63,14 @@ def run():
         giocate_oggi += 1
         decision, ev = get_decision(game, jackpot)
         
-        recent = get_recent(game, limit=15)
+        # IL MIX PERFETTO: Leggiamo le ultime 200 estrazioni
+        recent = get_recent(game, limit=200)
         mains, euros = generate_ticket(game, recent)
         
         num_str = "-".join(map(str, mains))
         if euros: 
             num_str += "  |  ⭐ " + "-".join(map(str, euros))
         
-        # Usa il nome visualizzato corretto
         nome_gioco = DISPLAY_NAMES.get(game, game.upper())
         
         report += f"✅ *{nome_gioco}*\n🎯 `{num_str}`\n\n"
