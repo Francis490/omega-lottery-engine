@@ -2,9 +2,8 @@ name: Omega Engine Automazione
 
 on:
   schedule:
-    # Si sveglia TUTTI I GIORNI alle 10:00 UTC (11:00 in Italia)
     - cron: '0 10 * * *'
-  workflow_dispatch: # Tasto per avvio manuale (solo per test)
+  workflow_dispatch:
 
 jobs:
   run-omega:
@@ -31,6 +30,9 @@ jobs:
           key: omega-db-${{ github.run_id }}
           restore-keys: |
             omega-db-
+
+      - name: Importa Storico Database
+        run: python import_history.py
 
       - name: Esegui il Bot
         env:
