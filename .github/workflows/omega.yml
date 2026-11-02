@@ -38,6 +38,9 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
 
+      - name: Genera Report Dati (Vortex)
+        run: python report_generator.py
+
       - name: Salva Database Aggiornato
         uses: actions/cache@v3
         with:
