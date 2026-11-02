@@ -2,9 +2,9 @@ name: Omega Engine Automazione
 
 on:
   schedule:
-    # Si sveglia TUTTI I GIORNI alle 12:00 UTC (14:00 in Italia)
-    - cron: '0 12 * * *'
-  workflow_dispatch: # Permette di avviarlo a mano
+    # Si sveglia TUTTI I GIORNI alle 10:00 UTC (11:00 in Italia)
+    - cron: '0 10 * * *'
+  workflow_dispatch: # Tasto per avvio manuale (solo per test)
 
 jobs:
   run-omega:
