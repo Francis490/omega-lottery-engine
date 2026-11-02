@@ -67,8 +67,7 @@ def import_superenalotto_csv():
          sqlite3.connect(DB_PATH) as conn:
         reader = csv.reader(f)
         for row in reader:
-            if len(row) < 8:
-                continue
+            if len(row) < 8: continue
             try:
                 date_str = row[1].strip()
                 dt = datetime.strptime(date_str, "%d/%m/%Y").date().isoformat()
@@ -76,13 +75,43 @@ def import_superenalotto_csv():
                 if len(nums) == 6 and all(1 <= n <= 90 for n in nums):
                     conn.execute("INSERT OR IGNORE INTO se VALUES (?,?,?,?,?,?,?)", (dt, *nums))
                     count += 1
-            except (ValueError, IndexError):
-                pass
+            except: pass
         conn.commit()
-    print(f"Importate {count} estrazioni per SUPERENALOTTO (da CSV gigante).")
+    print(f"Importate {count} estrazioni per SUPERENALOTTO (da CSV).")
+
+def import_swfl_csv():
+    filename = "swfl_storico.csv"
+    if not Path(filename).exists():
+        print(f"ERRORE: File {filename} non trovato!")
+        return
+
+    count = 0
+    with open(filename, mode='r', encoding='utf-8', errors='ignore') as f, \
+         sqlite3.connect(DB_PATH) as conn:
+        reader = csv.reader(f)
+        for row in reader:
+            # Salta l'intestazione
+            if len(row) < 3 or row[0].strip().lower() == 'concorso':
+                continue
+            try:
+                # Formato: concorso, data, "num1 num2 ..."
+                date_str = row[1].strip()
+                dt = datetime.strptime(date_str, "%d/%m/%Y").date().isoformat()
+                
+                # Estrae gli 8 numeri dalla stringa tra virgolette
+                nums_str = row[2].replace('"', '').strip()
+                nums = [int(n) for n in nums_str.split()]
+                
+                if len(nums) == 8 and all(1 <= n <= 90 for n in nums):
+                    conn.execute("INSERT OR IGNORE INTO vv VALUES (?,?,?,?,?,?,?,?,?)", (dt, *nums))
+                    count += 1
+            except: pass
+        conn.commit()
+    print(f"Importate {count} estrazioni per SWFL (da CSV).")
 
 if __name__ == "__main__":
     import_from_github("superenalotto-venus-vortex", "venus_history.json", "se", 6)
     import_from_github("aurora-engine", "vinci_history.json", "vv", 8)
     import_eurojackpot_csv()
     import_superenalotto_csv()
+    import_swfl_csv()
