@@ -3,6 +3,7 @@ import requests
 import json
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from database import init_db, get_recent
@@ -52,12 +53,14 @@ def run():
     logging.info("Recupero jackpot in corso...")
     jackpots = get_all_jackpots()
 
-    oggi = datetime.now().weekday()
+    # CORREZIONE: Usa il fuso orario italiano
+    now = datetime.now(ZoneInfo("Europe/Rome"))
+    oggi = now.weekday()
     day_names = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
     report = f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}*\n\n"
 
-    pwa_data = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "games": {}}
+    pwa_data = {"timestamp": now.strftime("%Y-%m-%d %H:%M:%S"), "games": {}}
 
     giocate_oggi = 0
 
