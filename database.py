@@ -4,42 +4,81 @@ from models import EurojackpotDraw, SuperenalottoDraw, VinciDraw
 
 DB_PATH = Path("omega.db")
 
+
 def init_db():
+    """Crea tabelle + migrazione idempotente per jolly/superstar."""
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("CREATE TABLE IF NOT EXISTS ej (date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, e1 INT, e2 INT)")
-        conn.execute("CREATE TABLE IF NOT EXISTS se (date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT)")
-        # La tabella del database rimane 'vv' per non perdere i dati, ma la mappatura sotto cambia
-        conn.execute("CREATE TABLE IF NOT EXISTS vv (date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT, n7 INT, n8 INT)")
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS ej "
+            "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, e1 INT, e2 INT)"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS se "
+            "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT)"
+        )
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS vv "
+            "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT, n7 INT, n8 INT)"
+        )
+        # Migrazione: aggiungi jolly/superstar a se se mancanti (idempotente)
+        for col in ("jolly", "superstar"):
+            try:
+                conn.execute(f"ALTER TABLE se ADD COLUMN {col} INT")
+            except sqlite3.OperationalError:
+                pass  # già presente
         conn.commit()
+
 
 def save_ej(draw: EurojackpotDraw):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("INSERT OR IGNORE INTO ej VALUES (?,?,?,?,?,?,?,?)", 
-                     (draw.draw_date.isoformat(), *draw.mains, *draw.euros))
+        conn.execute(
+            "INSERT OR IGNORE INTO ej VALUES (?,?,?,?,?,?,?,?)",
+            (draw.draw_date.isoformat(), *draw.mains, *draw.euros),
+        )
         conn.commit()
 
+
 def save_se(draw: SuperenalottoDraw):
+    """
+    INSERT OR IGNORE sulla PK `date`.
+    Se la riga esisteva già ma senza jolly/superstar (es. da live fetch),
+    li aggiorna con COALESCE (non sovrascrive valori già presenti).
+    """
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("INSERT OR IGNORE INTO se VALUES (?,?,?,?,?,?,?)", 
-                     (draw.draw_date.isoformat(), *draw.mains))
+        conn.execute(
+            "INSERT OR IGNORE INTO se (date, n1, n2, n3, n4, n5, n6, jolly, superstar) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (draw.draw_date.isoformat(), *draw.mains, draw.jolly, draw.superstar),
+        )
+        if draw.jolly is not None or draw.superstar is not None:
+            conn.execute(
+                "UPDATE se SET jolly = COALESCE(jolly, ?), superstar = COALESCE(superstar, ?) "
+                "WHERE date = ?",
+                (draw.jolly, draw.superstar, draw.draw_date.isoformat()),
+            )
         conn.commit()
+
 
 def save_vv(draw: VinciDraw):
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("INSERT OR IGNORE INTO vv VALUES (?,?,?,?,?,?,?,?,?)", 
-                     (draw.draw_date.isoformat(), *draw.mains))
+        conn.execute(
+            "INSERT OR IGNORE INTO vv VALUES (?,?,?,?,?,?,?,?,?)",
+            (draw.draw_date.isoformat(), *draw.mains),
+        )
         conn.commit()
+
 
 def get_recent(game: str, limit=15) -> list:
     table_map = {
         "eurojackpot": "ej",
         "superenalotto": "se",
-        "swfl": "vv" # Mappato 'swfl' alla tabella 'vv'
+        "swfl": "vv",
     }
     table_name = table_map.get(game, "ej")
-    
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(f"SELECT * FROM {table_name} ORDER BY date DESC LIMIT ?", (limit,)).fetchall()
+        rows = conn.execute(
+            f"SELECT * FROM {table_name} ORDER BY date DESC LIMIT ?", (limit,)
+        ).fetchall()
         return [dict(r) for r in rows]
