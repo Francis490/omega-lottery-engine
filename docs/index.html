@@ -16,14 +16,20 @@
         .ball { width: 45px; height: 45px; border-radius: 50%; background: #150b1f; border: 1px solid var(--venus); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; font-size: 1.1rem; }
         .ball.euro { border-color: var(--solar); color: var(--solar); }
         .skip { color: #ef4444; font-weight: bold; }
+        footer { margin-top: 30px; font-size: 0.85rem; color: #a89bbd; }
+        footer a { color: var(--vortex); text-decoration: none; }
     </style>
 </head>
 <body>
     <h1>OMEGA ENGINE</h1>
     <div class="container" id="dashboard">Caricamento dati...</div>
 
+    <footer>
+        <a href="privacy.html">Privacy Policy</a>
+    </footer>
+
     <script>
-        fetch('latest.json')
+        fetch('docs/latest.json')
             .then(res => res.json())
             .then(data => {
                 const dash = document.getElementById('dashboard');
