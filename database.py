@@ -4,7 +4,6 @@ from models import EurojackpotDraw, SuperenalottoDraw, VinciDraw
 
 DB_PATH = Path("omega.db")
 
-
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
@@ -27,7 +26,6 @@ def init_db():
                 pass
         conn.commit()
 
-
 def save_ej(draw: EurojackpotDraw):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
@@ -35,7 +33,6 @@ def save_ej(draw: EurojackpotDraw):
             (draw.draw_date.isoformat(), *draw.mains, *draw.euros),
         )
         conn.commit()
-
 
 def save_se(draw: SuperenalottoDraw):
     with sqlite3.connect(DB_PATH) as conn:
@@ -52,7 +49,6 @@ def save_se(draw: SuperenalottoDraw):
             )
         conn.commit()
 
-
 def save_vv(draw: VinciDraw):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
@@ -60,7 +56,6 @@ def save_vv(draw: VinciDraw):
             (draw.draw_date.isoformat(), *draw.mains),
         )
         conn.commit()
-
 
 def get_recent(game: str, limit=15) -> list:
     table_map = {
