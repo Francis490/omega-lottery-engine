@@ -6,7 +6,6 @@ DB_PATH = Path("omega.db")
 
 
 def init_db():
-    """Crea tabelle + migrazione idempotente per jolly/superstar."""
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute(
@@ -21,12 +20,11 @@ def init_db():
             "CREATE TABLE IF NOT EXISTS vv "
             "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT, n7 INT, n8 INT)"
         )
-        # Migrazione: aggiungi jolly/superstar a se se mancanti (idempotente)
         for col in ("jolly", "superstar"):
             try:
                 conn.execute(f"ALTER TABLE se ADD COLUMN {col} INT")
             except sqlite3.OperationalError:
-                pass  # già presente
+                pass
         conn.commit()
 
 
@@ -40,11 +38,6 @@ def save_ej(draw: EurojackpotDraw):
 
 
 def save_se(draw: SuperenalottoDraw):
-    """
-    INSERT OR IGNORE sulla PK `date`.
-    Se la riga esisteva già ma senza jolly/superstar (es. da live fetch),
-    li aggiorna con COALESCE (non sovrascrive valori già presenti).
-    """
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             "INSERT OR IGNORE INTO se (date, n1, n2, n3, n4, n5, n6, jolly, superstar) "
