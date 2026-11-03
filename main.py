@@ -15,11 +15,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Calendario estrazioni (0=Lun, 1=Mar, 2=Mer, 3=Gio, 4=Ven, 5=Sab, 6=Dom)
 DRAW_DAYS = {
-    "eurojackpot": [1, 4],                 # Martedì, Venerdì
-    "superenalotto": [1, 3, 4, 5],         # Martedì, Giovedì, Venerdì, Sabato
-    "swfl": [0, 1, 2, 3, 4, 5, 6]          # Tutti i giorni
+    "eurojackpot": [1, 4],                 
+    "superenalotto": [1, 3, 4, 5],         
+    "swfl": [0, 1, 2, 3, 4, 5, 6]          
 }
 
 DISPLAY_NAMES = {
@@ -40,7 +39,6 @@ def run():
     logging.info("Avvio Omega Engine...")
     init_db()
     
-    # Fetch di tutti i giochi
     fetch_eurojackpot()
     fetch_superenalotto()
     fetch_vinci()
@@ -52,7 +50,10 @@ def run():
     day_names = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
     
     report = f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}*\n\n"
-    pwa_data = {"timestamp": "Ultimo aggiornamento", "games": {}}
+    
+    # FIX: Timestamp dinamico per la PWA
+    pwa_data = {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "games": {}}
+    
     giocate_oggi = 0
 
     for game, jackpot in jackpots.items():
@@ -63,7 +64,6 @@ def run():
         giocate_oggi += 1
         decision, ev = get_decision(game, jackpot)
         
-        # IL MIX PERFETTO: Leggiamo le ultime 200 estrazioni
         recent = get_recent(game, limit=200)
         mains, euros = generate_ticket(game, recent)
         
