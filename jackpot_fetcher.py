@@ -45,7 +45,8 @@ def fetch_vinci_jackpot():
         if posts:
             latest = posts[0]
             content = BeautifulSoup(latest["content"]["rendered"], "lxml").get_text(" ", strip=True)
-            match = re.search(r"([\d\.]+)\s*euro\s*(?:al mese|mensili)", content, re.IGNORECASE)
+            # Migliorata la regex per accettare sia "euro" che "€"
+            match = re.search(r"([\d\.]+)\s*(?:euro|€)\s*(?:al mese|mensili)", content, re.IGNORECASE)
             if match:
                 rendita_mensile = int(re.sub(r"[^\d]", "", match.group(1)))
                 jackpot_stimato = rendita_mensile * 12 * 20
