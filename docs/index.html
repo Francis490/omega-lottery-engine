@@ -29,7 +29,8 @@
     </footer>
 
     <script>
-        fetch('docs/latest.json')
+        // CORREZIONE: rimosso "docs/" dal percorso
+        fetch('latest.json')
             .then(res => res.json())
             .then(data => {
                 const dash = document.getElementById('dashboard');
