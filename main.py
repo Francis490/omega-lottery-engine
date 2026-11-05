@@ -28,7 +28,6 @@ DISPLAY_NAMES = {
     "swfl": "SUPER WIN FOR LIFE",
 }
 
-
 def send_telegram(msg):
     if TOKEN and CHAT_ID:
         try:
@@ -41,11 +40,42 @@ def send_telegram(msg):
         except Exception as e:
             logging.error(f"Errore invio Telegram: {e}")
 
-
 def run():
     logging.info("Avvio Omega Engine...")
-    init_db()
+    
+    # CORREZIONE: Usa il fuso orario italiano
+    now = datetime.now(ZoneInfo("Europe/Rome"))
+    oggi = now.weekday()
+    today_str = now.strftime("%Y-%m-%d")
+    day_names = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
 
+    pwa_path = Path("docs/latest.json")
+    
+    # CONTROLLO DAILY LOCK: Se abbiamo già giocato oggi, non rigenerare!
+    if pwa_path.exists():
+        try:
+            with open(pwa_path, "r") as f:
+                existing_data = json.load(f)
+            
+            # Se il timestamp inizia con la data di oggi, i numeri sono già bloccati
+            if existing_data.get("timestamp", "").startswith(today_str):
+                logging.info("Sestina già generata oggi. Invio promemoria con i numeri esistenti.")
+                report = f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}* (Promemoria)\n\n"
+                for game, info in existing_data.get("games", {}).items():
+                    if info.get("status") == "PLAY":
+                        nome_gioco = DISPLAY_NAMES.get(game, game.upper())
+                        num_str = "-".join(map(str, info["mains"]))
+                        if info.get("euros"):
+                            num_str += "  |  ⭐ " + "-".join(map(str, info["euros"]))
+                        report += f"✅ *{nome_gioco}*\n🎯 `{num_str}`\n\n"
+                if not report.endswith("(Promemoria)\n\n"):
+                    send_telegram(report)
+                return  # Esce dalla funzione, non tocca il database né rigenera
+        except Exception as e:
+            logging.error(f"Errore lettura latest.json: {e}")
+
+    # Se arriviamo qui, è la prima volta che giriamo oggi
+    init_db()
     fetch_eurojackpot()
     fetch_superenalotto()
     fetch_vinci()
@@ -53,15 +83,8 @@ def run():
     logging.info("Recupero jackpot in corso...")
     jackpots = get_all_jackpots()
 
-    # CORREZIONE: Usa il fuso orario italiano
-    now = datetime.now(ZoneInfo("Europe/Rome"))
-    oggi = now.weekday()
-    day_names = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
-
     report = f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}*\n\n"
-
     pwa_data = {"timestamp": now.strftime("%Y-%m-%d %H:%M:%S"), "games": {}}
-
     giocate_oggi = 0
 
     for game, jackpot in jackpots.items():
@@ -102,7 +125,6 @@ def run():
 
     send_telegram(report)
     logging.info("Ciclo Omega completato con successo.")
-
 
 if __name__ == "__main__":
     run()
