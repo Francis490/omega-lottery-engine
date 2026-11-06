@@ -36,7 +36,6 @@ DATE_MONTH_REGEX = (
 
 
 def _parse_italian_date(text: str):
-    """Estrae la prima data italiana dal testo (rifiuta date future)."""
     m = re.search(DATE_MONTH_REGEX, text, re.IGNORECASE)
     if not m:
         return None
@@ -135,60 +134,47 @@ def fetch_superenalotto() -> bool:
 
 
 def fetch_vinci() -> bool:
-    # Usiamo Lottologia, ma cerchiamo la tabella HTML invece del testo
+    # Torna a Agimeg. Prende tutti i numeri, filtra 1-90, ne prende 8.
     try:
         res = requests.get(
-            "https://www.lottologia.com/super-win-for-life/estrazioni/",
+            "https://www.agimeg.it/wp-json/wp/v2/posts?categories=1031",
             timeout=15,
             headers={"User-Agent": "Mozilla/5.0"},
         )
         res.raise_for_status()
-        soup = BeautifulSoup(res.text, "lxml")
-        
-        # Trova la tabella che contiene "Data" o "Concorso"
-        table = None
-        for t in soup.find_all("table"):
-            if "Data" in t.get_text() or "Concorso" in t.get_text():
-                table = t
-                break
-                
-        if not table:
-            logger.warning("SWFL: Tabella non trovata su Lottologia.")
+        posts = res.json()
+
+        if not posts:
+            logger.warning("SWFL: Nessun post trovato.")
             return False
-            
-        rows = table.find_all("tr")
-        if len(rows) < 2:
-            logger.warning("SWFL: Righe insufficienti nella tabella.")
-            return False
-            
-        # La riga 1 (dopo l'header) è l'estrazione più recente
-        row_text = rows[1].get_text(" ", strip=True)
+
+        latest = posts[0]
+        content = BeautifulSoup(latest["content"]["rendered"], "lxml").get_text(" ", strip=True)
+
+        # Estrazione brutale: prendi tutti i numeri da 1 a 2 cifre
+        potential_nums = re.findall(r"\b\d{1,2}\b", content)
         
-        # Estrai la data (cerca un formato dd/mm/yyyy)
-        date_match = re.search(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})", row_text)
-        if not date_match:
-            logger.warning("SWFL: Data non trovata nella riga.")
-            return False
-            
-        d, m, y = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
-        draw_date = datetime(y, m, d).date()
-        
-        # Estrai gli 8 numeri validi (da 1 a 90)
-        all_nums = [int(n) for n in re.findall(r"\b\d{1,2}\b", row_text)]
         valid_nums = []
-        for n in all_nums:
-            if 1 <= n <= 90 and n not in valid_nums:
-                valid_nums.append(n)
+        for n in potential_nums:
+            num = int(n)
+            if 1 <= num <= 90 and num not in valid_nums:
+                valid_nums.append(num)
                 
         if len(valid_nums) < 8:
-            logger.warning(f"SWFL: trovati solo {len(valid_nums)} numeri validi: {valid_nums}")
+            logger.warning(f"SWFL: trovati solo {len(valid_nums)} numeri validi nel post.")
             return False
             
+        # Prende i primi 8 numeri validi
         nums = valid_nums[:8]
-        
+
+        # Prova a estrarre la data dal testo, altrimenti usa quella del post
+        draw_date = _parse_italian_date(content)
+        if not draw_date:
+            draw_date = datetime.strptime(latest["date"][:10], "%Y-%m-%d").date()
+            
         draw = VinciDraw(draw_date=draw_date, mains=nums)
         save_vv(draw)
-        logger.info(f"SWFL OK: {nums} ({draw_date})")
+        logger.info(f"SWFL OK (Agimeg brute-force): {nums} ({draw_date})")
         return True
     except Exception as e:
         logger.error(f"Errore Fetch SWFL: {e}")
