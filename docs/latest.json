@@ -1,8 +1,37 @@
 {
-    "timestamp": "2026-11-05 21:28:24",
+    "timestamp": "2026-11-06 18:12:07",
     "games": {
-        "eurojackpot": { "status": "STALE", "ev": 0 },
-        "superenalotto": { "status": "STALE", "ev": 0 },
-        "swfl": { "status": "STALE", "ev": 0 }
+        "eurojackpot": {
+            "status": "PLAY",
+            "ev": 0.9145,
+            "mains": [
+                4,
+                17,
+                27,
+                33,
+                34
+            ],
+            "euros": [
+                2,
+                5
+            ]
+        },
+        "superenalotto": {
+            "status": "PLAY",
+            "ev": 0.5642,
+            "mains": [
+                27,
+                37,
+                55,
+                60,
+                64,
+                82
+            ],
+            "euros": []
+        },
+        "swfl": {
+            "status": "STALE",
+            "ev": 0
+        }
     }
 }
