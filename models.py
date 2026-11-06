@@ -10,12 +10,14 @@ class EurojackpotDraw(BaseModel):
     source: str = "multipasko"
 
     @field_validator("mains")
+    @classmethod
     def check_mains(cls, v):
         if any(not (1 <= n <= 50) for n in v) or len(set(v)) != 5:
             raise ValueError("Mains non validi")
         return sorted(v)
 
     @field_validator("euros")
+    @classmethod
     def check_euros(cls, v):
         if any(not (1 <= n <= 12) for n in v) or len(set(v)) != 2:
             raise ValueError("Euros non validi")
@@ -30,6 +32,7 @@ class SuperenalottoDraw(BaseModel):
     source: str = "lottologia"
 
     @field_validator("mains")
+    @classmethod
     def check_mains(cls, v):
         if any(not (1 <= n <= 90) for n in v) or len(set(v)) != 6:
             raise ValueError("Mains non validi")
@@ -42,6 +45,7 @@ class VinciDraw(BaseModel):
     source: str = "agimeg"
 
     @field_validator("mains")
+    @classmethod
     def check_mains(cls, v):
         if any(not (1 <= n <= 90) for n in v) or len(set(v)) != 8:
             raise ValueError("Mains non validi")
