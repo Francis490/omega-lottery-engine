@@ -29,16 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Ripristina Database
-        id: cache-db
-        uses: actions/cache/restore@v4
-        with:
-          path: omega.db
-          key: omega-db-${{ github.run_id }}
-          restore-keys: |
-            omega-db-
-
-      - name: Importa Storico Database
+      - name: Importa Storico Database (solo se DB assente)
         run: python import_history.py
 
       - name: Esegui il Bot
@@ -56,13 +47,6 @@ jobs:
       - name: Esporta CSV aggiornati dal DB
         run: python export_csv.py
 
-      - name: Salva Database Aggiornato
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: omega.db
-          key: omega-db-${{ github.run_id }}
-
       - name: Commit per la PWA
         run: |
           set -e
@@ -71,6 +55,7 @@ jobs:
 
           git add docs/latest.json
           git add EJ_ab_2018.csv superenalotto_storico.csv swfl_storico.csv
+          git add -f omega.db
 
           if git diff --cached --quiet; then
             echo "Nessuna modifica da committare."
