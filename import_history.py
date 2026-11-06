@@ -18,6 +18,24 @@ SN_CSV_CANDIDATES = [
 SWFL_CSV = Path("swfl_storico.csv")
 
 
+def db_is_populated() -> bool:
+    """True se omega.db esiste e ha almeno una riga in una tabella."""
+    if not DB_PATH.exists():
+        return False
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            for table in ("ej", "se", "vv"):
+                try:
+                    count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                    if count > 0:
+                        return True
+                except sqlite3.OperationalError:
+                    continue
+    except Exception:
+        return False
+    return False
+
+
 def _detect_format(path: Path) -> str:
     with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
         first = f.readline().strip().lower()
@@ -229,12 +247,17 @@ def import_swfl_csv() -> int:
 
 if __name__ == "__main__":
     init_db()
-    print("=" * 62)
-    print(" Import storico Omega Engine")
-    print("=" * 62)
-    import_eurojackpot_csv()
-    import_superenalotto_csv()
-    import_swfl_csv()
+
+    if db_is_populated():
+        print("[SKIP] omega.db già popolato, salto import CSV.")
+    else:
+        print("=" * 62)
+        print(" DB vuoto: importo storico dai CSV")
+        print("=" * 62)
+        import_eurojackpot_csv()
+        import_superenalotto_csv()
+        import_swfl_csv()
+
     print("=" * 62)
     with sqlite3.connect(DB_PATH) as conn:
         for table, label in [("ej", "Eurojackpot"), ("se", "Superenalotto"), ("vv", "SWFL")]:
