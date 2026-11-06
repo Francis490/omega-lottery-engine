@@ -36,11 +36,7 @@ DATE_MONTH_REGEX = (
 
 
 def _parse_italian_date(text: str):
-    """
-    Estrae la prima data italiana dal testo.
-    Rifiuta date future (lottologia mostra "prossima estrazione" prima
-    della data dell'ultima estrazione).
-    """
+    """Estrae la prima data italiana dal testo (rifiuta date future)."""
     m = re.search(DATE_MONTH_REGEX, text, re.IGNORECASE)
     if not m:
         return None
@@ -138,58 +134,43 @@ def fetch_superenalotto() -> bool:
         return False
 
 
-def _extract_date_from_content(content: str, fallback_post_date: str):
-    today = datetime.now(ZoneInfo("Europe/Rome")).date()
-
-    for m in re.finditer(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})", content):
-        try:
-            d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            candidate = datetime(y, mo, d).date()
-            days_ago = (today - candidate).days
-            if 0 <= days_ago <= 7:
-                return candidate
-        except ValueError:
-            continue
-
-    parsed = _parse_italian_date(content)
-    if parsed:
-        days_ago = (today - parsed).days
-        if 0 <= days_ago <= 7:
-            return parsed
-
-    return datetime.strptime(fallback_post_date[:10], "%Y-%m-%d").date()
-
-
 def fetch_vinci() -> bool:
+    # Usiamo Lottologia anche per SWFL, è molto più stabile di Agimeg
     try:
         res = requests.get(
-            "https://www.agimeg.it/wp-json/wp/v2/posts?categories=1031",
+            "https://www.lottologia.com/super-win-for-life/estrazioni/",
             timeout=15,
             headers={"User-Agent": "Mozilla/5.0"},
         )
         res.raise_for_status()
-        posts = res.json()
+        soup = BeautifulSoup(res.text, "lxml")
+        text = soup.get_text(" ", strip=True)
 
-        if not posts:
-            logger.warning("SWFL: Nessun post trovato.")
+        # Cerca la data
+        draw_date = _parse_italian_date(text)
+        if not draw_date:
+            logger.warning("SWFL: data non trovata.")
             return False
 
-        latest = posts[0]
-        content = BeautifulSoup(
-            latest["content"]["rendered"], "lxml"
-        ).get_text(" ", strip=True)
-
+        # Cerca gli 8 numeri. Lottologia di solito li mostra in sequenza
+        # Cerchiamo un blocco di 8 numeri separati da spazi o virgole
         match = re.search(
-            r"(?:combinazione|numeri)\s*(?:vincent[ei]|estratti)[:\s]*"
-            r"((?:\d{1,2}[\s,\-]+){7}\d{1,2})",
-            content,
+            r"(?:Numeri|combinazione|estratti)[^0-9]*((?:\d{1,2}[\s,]+){7}\d{1,2})",
+            text,
             re.IGNORECASE,
         )
+        
+        # Fallback: se non trova la parola chiave, cerca semplicemente 8 numeri consecutivi
         if not match:
-            logger.warning("SWFL: combinazione vincente non trovata nel post.")
+            match = re.search(r"((?:\d{1,2}[\s,]+){7}\d{1,2})", text)
+
+        if not match:
+            logger.warning("SWFL: numeri non trovati.")
             return False
 
-        nums = [int(n) for n in re.split(r"[\s,\-]+", match.group(1).strip())]
+        nums = [int(n) for n in re.split(r"[\s,]+", match.group(1).strip())]
+        
+        # Validazione
         if (
             len(nums) != 8
             or len(set(nums)) != 8
@@ -198,7 +179,6 @@ def fetch_vinci() -> bool:
             logger.warning(f"SWFL: numeri non validi: {nums}")
             return False
 
-        draw_date = _extract_date_from_content(content, latest["date"])
         draw = VinciDraw(draw_date=draw_date, mains=nums)
         save_vv(draw)
         logger.info(f"SWFL OK: {nums} ({draw_date})")
