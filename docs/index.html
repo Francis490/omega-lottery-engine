@@ -6,60 +6,129 @@
     <title>Omega Engine</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg: #0a0612; --card: rgba(21, 11, 31, 0.75); --venus: #c026d3; --vortex: #06b6d4; --solar: #fbbf24; --text: #f1e8ff; }
-        body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        h1 { background: linear-gradient(90deg, var(--venus), var(--vortex)); -webkit-background-clip: text; color: transparent; letter-spacing: 2px; }
-        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 15px; }
-        .card { background: var(--card); border: 1px solid rgba(192, 38, 211, 0.3); border-radius: 12px; padding: 20px; }
-        .card h2 { margin: 0 0 10px 0; font-size: 1.2rem; color: var(--vortex); }
+        :root {
+            --bg: #0a0612;
+            --card: rgba(21, 11, 31, 0.75);
+            --venus: #c026d3;
+            --vortex: #06b6d4;
+            --solar: #fbbf24;
+            --text: #f1e8ff;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            background: linear-gradient(90deg, var(--venus), var(--vortex));
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: 2px;
+            margin-bottom: 4px;
+        }
+        .subtitle { color: #a89bbd; font-size: 0.85rem; margin-bottom: 20px; }
+        .container {
+            width: 100%; max-width: 600px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid rgba(192, 38, 211, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(8px);
+        }
+        .card h2 {
+            margin: 0 0 12px 0;
+            font-size: 1.2rem;
+            color: var(--vortex);
+            letter-spacing: 1px;
+        }
         .balls { display: flex; gap: 10px; flex-wrap: wrap; }
-        .ball { width: 45px; height: 45px; border-radius: 50%; background: #150b1f; border: 1px solid var(--venus); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-weight: bold; font-size: 1.1rem; }
+        .ball {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: #150b1f;
+            border: 1px solid var(--venus);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: bold; font-size: 1.1rem;
+        }
         .ball.euro { border-color: var(--solar); color: var(--solar); }
+        .stale { color: #f59e0b; font-weight: bold; }
         .skip { color: #ef4444; font-weight: bold; }
+        .no-draw { color: #a89bbd; }
+        .ev {
+            font-size: 0.75rem;
+            color: #a89bbd;
+            margin-top: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
         footer { margin-top: 30px; font-size: 0.85rem; color: #a89bbd; }
         footer a { color: var(--vortex); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <h1>OMEGA ENGINE</h1>
-    <div class="container" id="dashboard">Caricamento dati...</div>
+    <div class="subtitle" id="ts">—</div>
+    <div class="container" id="dashboard">Caricamento...</div>
 
     <footer>
         <a href="privacy.html">Privacy Policy</a>
     </footer>
 
     <script>
-        // CORREZIONE: rimosso "docs/" dal percorso
-        fetch('latest.json')
-            .then(res => res.json())
+        const dash = document.getElementById('dashboard');
+        const ts = document.getElementById('ts');
+
+        fetch(`latest.json?v=${Date.now()}`, { cache: 'no-store' })
+            .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
             .then(data => {
-                const dash = document.getElementById('dashboard');
+                if (data.timestamp) ts.textContent = 'Aggiornato: ' + data.timestamp;
                 dash.innerHTML = '';
-                
-                for (const [game, info] of Object.entries(data.games)) {
+
+                for (const [game, info] of Object.entries(data.games || {})) {
                     const card = document.createElement('div');
                     card.className = 'card';
-                    
+
                     let html = `<h2>${game.toUpperCase()}</h2>`;
-                    
+
                     if (info.status === 'NO_DRAW') {
-                        html += `<div style="color: #a89bbd;">Nessuna estrazione oggi.</div>`;
+                        html += `<div class="no-draw">Nessuna estrazione oggi.</div>`;
                     } else if (info.status === 'SKIP') {
-                        html += `<div class="skip">🛑 SKIP - Non giocare</div>`;
-                    } else {
+                        html += `<div class="skip">🛑 SKIP — EV troppo basso (${(info.ev || 0).toFixed(2)}€)</div>`;
+                    } else if (info.status === 'STALE') {
+                        html += `<div class="stale">⚠️ Dati non aggiornati. Attendere il prossimo run del bot.</div>`;
+                    } else if (info.status === 'PLAY') {
                         html += `<div class="balls">`;
                         info.mains.forEach(n => html += `<div class="ball">${n}</div>`);
                         if (info.euros && info.euros.length > 0) {
                             info.euros.forEach(n => html += `<div class="ball euro">${n}</div>`);
                         }
                         html += `</div>`;
+                        if (typeof info.ev === 'number') {
+                            html += `<div class="ev">EV: ${info.ev.toFixed(2)}€</div>`;
+                        }
+                    } else {
+                        html += `<div class="no-draw">Stato sconosciuto: ${info.status}</div>`;
                     }
                     card.innerHTML = html;
                     dash.appendChild(card);
                 }
+
+                if (Object.keys(data.games || {}).length === 0) {
+                    dash.innerHTML = '<div class="card no-draw">Nessun dato disponibile.</div>';
+                }
             })
             .catch(err => {
-                document.getElementById('dashboard').innerHTML = "Errore nel caricamento. Esegui il bot prima.";
+                console.error(err);
+                dash.innerHTML = '<div class="card stale">Errore nel caricamento. Esegui il bot prima.</div>';
             });
     </script>
 </body>
