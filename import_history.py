@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,8 @@ SN_CSV_CANDIDATES = [
     Path("Estrazioni del Superenalotto dal 03 Dicembre 1997 al 31 Ottobre 2026 _ Superenalottooggi.it.csv"),
 ]
 SWFL_CSV = Path("swfl_storico.csv")
+
+EJ_DATE_REGEX = re.compile(r"^\d{2}\.\d{2}\.\d{4}$")
 
 
 def db_is_populated() -> bool:
@@ -73,7 +76,9 @@ def _import_ej_old(path: Path) -> int:
             if len(row) < 9 or not row[0].strip():
                 continue
             first = row[0].strip()
-            if first == "Datum" or first.startswith("Spieleinsätze") or first.startswith("Alle Angaben"):
+            # Salta header, footer e commenti: elabora solo righe che iniziano
+            # con una data tedesca dd.mm.yyyy (robusto al mojibake del CSV).
+            if not EJ_DATE_REGEX.match(first):
                 continue
             try:
                 draw_date = datetime.strptime(first, "%d.%m.%Y").date()
