@@ -1,28 +1,113 @@
 import random
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from collections import Counter
 
 GAMES = {
     "eurojackpot": {"mains": 5, "euros": 2, "cost": 2.0, "max_pool": 50},
     "superenalotto": {"mains": 6, "euros": 0, "cost": 1.0, "max_pool": 90},
+    # SWFL: 8 numeri estratti, il giocatore ne sceglie 6 (Sisal).
+    # Il DB contiene 8 numeri per estrazione; tutti contribuiscono alle
+    # statistiche caldo/freddo, ma il ticket giocabile è di 6.
     "swfl": {"mains": 6, "euros": 0, "cost": 2.0, "max_pool": 90},
 }
 
+C_90_6 = 622_614_630  # C(90, 6)
+
+JACKPOT_PROBABILITY = {
+    "eurojackpot": 1 / 139_838_160,  # C(50,5) * C(12,2)
+    "superenalotto": 1 / C_90_6,
+    "swfl": 28 / C_90_6,             # C(8,6) / C(90,6)
+}
+
+LOWER_TIER_RETURN = {
+    "eurojackpot": 0.50,
+    "superenalotto": 0.30,
+    "swfl": 0.55,
+}
+
+SKIP_THRESHOLD = 0.25
+
+
 def get_decision(game, jackpot):
-    return "PLAY_MAX", 0.0
+    """
+    Restituisce (decisione, EV in euro per biglietto).
+    decisione ∈ {"PLAY_MAX", "SKIP"}
+    """
+    config = GAMES.get(game)
+    if config is None:
+        return "SKIP", 0.0
+
+    cost = config["cost"]
+    p_jackpot = JACKPOT_PROBABILITY[game]
+    lower_return = LOWER_TIER_RETURN[game] * cost
+    jackpot_ev = jackpot * p_jackpot
+    ev_total = jackpot_ev + lower_return
+    ev_ratio = ev_total / cost if cost else 0.0
+
+    if ev_ratio < SKIP_THRESHOLD:
+        return "SKIP", ev_total
+    return "PLAY_MAX", ev_total
+
+
+def _decade(n):
+    if n <= 9: return 1
+    if n <= 19: return 2
+    if n <= 29: return 3
+    if n <= 39: return 4
+    if n <= 49: return 5
+    if n <= 59: return 6
+    if n <= 69: return 7
+    if n <= 79: return 8
+    return 9
+
+
+def _passes_filters(mains, is_ej, num_to_pick):
+    total_sum = sum(mains)
+    if is_ej:
+        if not (90 <= total_sum <= 170): return False
+    else:
+        if not (200 <= total_sum <= 350): return False
+
+    evens = sum(1 for n in mains if n % 2 == 0)
+    if num_to_pick == 5:
+        if evens < 2 or evens > 3: return False
+    else:
+        if evens < 2 or evens > 4: return False
+
+    decades = {_decade(n) for n in mains}
+    if len(decades) < 3: return False
+
+    consec_count = 0
+    for i in range(len(mains) - 1):
+        if mains[i + 1] - mains[i] == 1:
+            consec_count += 1
+    if consec_count > 1: return False
+
+    last_digits = Counter(n % 10 for n in mains)
+    if any(c > 2 for c in last_digits.values()): return False
+
+    spread = mains[-1] - mains[0]
+    if is_ej:
+        if spread < 25: return False
+    else:
+        if spread < 40: return False
+
+    return True
+
 
 def generate_ticket(game, recent_draws, seed=None):
     if seed is not None:
         rng = random.Random(seed)
     else:
-        today_seed = int(datetime.now().strftime("%Y%m%d"))
+        now_rome = datetime.now(ZoneInfo("Europe/Rome"))
+        today_seed = int(now_rome.strftime("%Y%m%d"))
         rng = random.Random(today_seed + len(game))
 
-    is_ej = (game == "eurojackpot")
+    is_ej = game == "eurojackpot"
     max_pool = GAMES[game]["max_pool"]
-    num_to_pick = GAMES[game]["mains"]
+    num_to_pick = GAMES[game]["mains"]  # 5 | 6 | 6
 
-    # --- ANALISI MEMORIA (CALDO/FREDDO) ---
     freq = Counter()
     last_seen = {}
     for i, d in enumerate(recent_draws):
@@ -32,14 +117,18 @@ def generate_ticket(game, recent_draws, seed=None):
                 if v not in last_seen:
                     last_seen[v] = i
 
-    hot_nums = [n for n, count in freq.most_common() if n <= max_pool]
+    hot_nums = [n for n, _ in freq.most_common() if n <= max_pool]
     all_nums = list(range(1, max_pool + 1))
-    cold_nums = sorted(all_nums, key=lambda n: last_seen.get(n, len(recent_draws)), reverse=True)
+    cold_nums = sorted(
+        all_nums,
+        key=lambda n: last_seen.get(n, len(recent_draws)),
+        reverse=True,
+    )
 
-    # --- GENERAZIONE CON FILTRI DI VALIDAZIONE (IL MIRINO) ---
-    best_mains = []
+    best_mains = None
+    fallback_mains = None
     attempts = 0
-    max_attempts = 20000
+    max_attempts = 40000
 
     while attempts < max_attempts:
         attempts += 1
@@ -48,19 +137,18 @@ def generate_ticket(game, recent_draws, seed=None):
         if not hot_nums or not cold_nums:
             mains = sorted(rng.sample(all_nums, num_to_pick))
         else:
-            # 1. Prendi 2 Caldi
             hot_picks = rng.sample(hot_nums[:20], min(2, len(hot_nums)))
             picks.extend(hot_picks)
 
-            # 2. Prendi 2 Freddi
             cold_candidates = [n for n in cold_nums if n not in picks]
-            cold_picks = rng.sample(cold_candidates, min(2, len(cold_candidates)))
+            cold_picks = rng.sample(
+                cold_candidates, min(2, len(cold_candidates))
+            )
             picks.extend(cold_picks)
 
-            # 3. Prendi il resto Random
             needed_random = num_to_pick - len(picks)
             remaining_pool = [n for n in all_nums if n not in picks]
-            if len(remaining_pool) >= needed_random:
+            if needed_random > 0 and len(remaining_pool) >= needed_random:
                 picks.extend(rng.sample(remaining_pool, needed_random))
 
             picks = list(dict.fromkeys(picks))
@@ -70,73 +158,35 @@ def generate_ticket(game, recent_draws, seed=None):
 
             mains = sorted(picks[:num_to_pick])
 
-        # --- APPLICAZIONE DEI FILTRI TATTICI ---
-        
-        # Filtro 1: Somma
-        total_sum = sum(mains)
-        if is_ej:
-            if not (90 <= total_sum <= 170): continue
-        else:
-            if not (200 <= total_sum <= 350): continue
+        if fallback_mains is None:
+            fallback_mains = mains
 
-        # Filtro 2: Parità (Massimo 4 pari o 4 dispari)
-        evens = sum(1 for n in mains if n % 2 == 0)
-        if evens < 2 or evens > 4: continue
+        if _passes_filters(mains, is_ej, num_to_pick):
+            best_mains = mains
+            break
 
-        # Filtro 3: Decine (Almeno 3 decine diverse)
-        decades = set()
-        for n in mains:
-            if n <= 9: decades.add(1)
-            elif n <= 19: decades.add(2)
-            elif n <= 29: decades.add(3)
-            elif n <= 39: decades.add(4)
-            elif n <= 49: decades.add(5)
-            elif n <= 59: decades.add(6)
-            elif n <= 69: decades.add(7)
-            elif n <= 79: decades.add(8)
-            else: decades.add(9)
-        if len(decades) < 3: continue
+    if best_mains is None:
+        best_mains = fallback_mains or sorted(rng.sample(all_nums, num_to_pick))
 
-        # Filtro 4: Consecutivi (Max 1 coppia consecutiva)
-        consec_count = 0
-        for i in range(len(mains) - 1):
-            if mains[i+1] - mains[i] == 1:
-                consec_count += 1
-        if consec_count > 1: continue
-
-        # Filtro 5: Unità (Max 2 numeri con la stessa cifra finale)
-        last_digits = [n % 10 for n in mains]
-        digit_counts = Counter(last_digits)
-        if any(count > 2 for count in digit_counts.values()): continue
-
-        # Filtro 6: Ampiezza (Spread)
-        spread = mains[-1] - mains[0]
-        if is_ej:
-            if spread < 25: continue
-        else:
-            if spread < 40: continue
-
-        # Se supera TUTTI i filtri, è la nostra sestina perfetta
-        best_mains = mains
-        break
-
-    if not best_mains:
-        best_mains = mains # Fallback di sicurezza
-
-    # --- EURONUMERI (Solo Eurojackpot) ---
     if is_ej:
         euro_freq = Counter()
         euro_last_seen = {}
         for i, d in enumerate(recent_draws):
             if d.get("e1"):
                 euro_freq[d["e1"]] += 1
-                if d["e1"] not in euro_last_seen: euro_last_seen[d["e1"]] = i
+                if d["e1"] not in euro_last_seen:
+                    euro_last_seen[d["e1"]] = i
             if d.get("e2"):
                 euro_freq[d["e2"]] += 1
-                if d["e2"] not in euro_last_seen: euro_last_seen[d["e2"]] = i
+                if d["e2"] not in euro_last_seen:
+                    euro_last_seen[d["e2"]] = i
 
-        euro_hot = [n for n, count in euro_freq.most_common() if n <= 12]
-        euro_cold = sorted(list(range(1, 13)), key=lambda n: euro_last_seen.get(n, len(recent_draws)), reverse=True)
+        euro_hot = [n for n, _ in euro_freq.most_common() if n <= 12]
+        euro_cold = sorted(
+            list(range(1, 13)),
+            key=lambda n: euro_last_seen.get(n, len(recent_draws)),
+            reverse=True,
+        )
 
         if euro_hot and euro_cold:
             e_hot_pick = rng.choice(euro_hot[:5])
@@ -145,7 +195,7 @@ def generate_ticket(game, recent_draws, seed=None):
             euros = sorted([e_hot_pick, e_cold_pick])
         else:
             euros = sorted(rng.sample(list(range(1, 13)), 2))
-            
+
         return best_mains, euros
 
     return best_mains, []
