@@ -7,8 +7,6 @@ GAMES = {
     "eurojackpot": {"mains": 5, "euros": 2, "cost": 2.0, "max_pool": 50},
     "superenalotto": {"mains": 6, "euros": 0, "cost": 1.0, "max_pool": 90},
     # SWFL: 8 numeri estratti, il giocatore ne sceglie 6 (Sisal).
-    # Il DB contiene 8 numeri per estrazione; tutti contribuiscono alle
-    # statistiche caldo/freddo, ma il ticket giocabile è di 6.
     "swfl": {"mains": 6, "euros": 0, "cost": 2.0, "max_pool": 90},
 }
 
@@ -20,13 +18,23 @@ JACKPOT_PROBABILITY = {
     "swfl": 28 / C_90_6,             # C(8,6) / C(90,6)
 }
 
+# Ritorno atteso dei premi minori (frazione del costo biglietto).
+# Calibrati sui payout ufficiali dichiarati dai gestori:
+#   - Eurojackpot: payout totale ~50% delle giocate, jackpot ~15% -> minori ~35%
+#   - Superenalotto: payout totale ~60%, jackpot ~10% -> minori ~50%
+#   - SWFL: payout totale ~65%, jackpot (rendita) ~10% -> minori ~55%
+# Per ricalibrare EJ sui dati storici reali, esegui `python calibrate_ev.py`.
 LOWER_TIER_RETURN = {
-    "eurojackpot": 0.50,
-    "superenalotto": 0.30,
+    "eurojackpot": 0.35,
+    "superenalotto": 0.50,
     "swfl": 0.55,
 }
 
-SKIP_THRESHOLD = 0.25
+# SKIP è disabilitato di default: il bot genera sempre le sestine nei giorni
+# di estrazione. Metti ENABLE_SKIP=True se vuoi che salti le giocate con
+# EV/costo < SKIP_THRESHOLD (es. quando il jackpot è basso e non compensa).
+ENABLE_SKIP = False
+SKIP_THRESHOLD = 0.60
 
 
 def get_decision(game, jackpot):
@@ -45,7 +53,7 @@ def get_decision(game, jackpot):
     ev_total = jackpot_ev + lower_return
     ev_ratio = ev_total / cost if cost else 0.0
 
-    if ev_ratio < SKIP_THRESHOLD:
+    if ENABLE_SKIP and ev_ratio < SKIP_THRESHOLD:
         return "SKIP", ev_total
     return "PLAY_MAX", ev_total
 
@@ -106,7 +114,7 @@ def generate_ticket(game, recent_draws, seed=None):
 
     is_ej = game == "eurojackpot"
     max_pool = GAMES[game]["max_pool"]
-    num_to_pick = GAMES[game]["mains"]  # 5 | 6 | 6
+    num_to_pick = GAMES[game]["mains"]
 
     freq = Counter()
     last_seen = {}
