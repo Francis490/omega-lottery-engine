@@ -36,6 +36,11 @@ DATE_MONTH_REGEX = (
 
 
 def _parse_italian_date(text: str):
+    """
+    Estrae la prima data italiana dal testo.
+    Rifiuta date future (lottologia mostra "prossima estrazione" prima
+    della data dell'ultima estrazione).
+    """
     m = re.search(DATE_MONTH_REGEX, text, re.IGNORECASE)
     if not m:
         return None
@@ -43,7 +48,11 @@ def _parse_italian_date(text: str):
         day = int(m.group(1))
         month = MESI[m.group(2).lower()]
         year = int(m.group(3))
-        return datetime(year, month, day).date()
+        candidate = datetime(year, month, day).date()
+        today = datetime.now(ZoneInfo("Europe/Rome")).date()
+        if candidate > today:
+            return None
+        return candidate
     except (KeyError, ValueError):
         return None
 
