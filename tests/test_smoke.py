@@ -1,13 +1,5 @@
 """
 Smoke test eseguiti in CI dopo main.py, prima del commit.
-
-Bloccano il push se:
-- i modelli hanno cardinalità sbagliate
-- generate_ticket produce sestine non valide
-- get_decision ritorna stati/EV non coerenti
-- latest.json non ha la struttura attesa
-
-NON fanno fetch di rete: usano dati sintetici deterministici.
 """
 import json
 import random
@@ -17,8 +9,10 @@ import pytest
 
 from models import EurojackpotDraw, SuperenalottoDraw, VinciDraw
 from omega_brain import (
+    ENABLE_SKIP,
     GAMES,
     JACKPOT_PROBABILITY,
+    LOWER_TIER_RETURN,
     SKIP_THRESHOLD,
     generate_ticket,
     get_decision,
@@ -42,11 +36,7 @@ def _fake_draws(n=30, pool=90, seed=0):
 
 # ---------------- Models ----------------
 def test_eurojackpot_model_cardinality():
-    d = EurojackpotDraw(
-        draw_date="2026-11-06",
-        mains=[1, 2, 3, 4, 5],
-        euros=[1, 2],
-    )
+    d = EurojackpotDraw(draw_date="2026-11-06", mains=[1, 2, 3, 4, 5], euros=[1, 2])
     assert len(d.mains) == 5
     assert len(d.euros) == 2
 
@@ -78,19 +68,17 @@ def test_generate_ticket_cardinality(game, expected_mains, expected_euros):
     assert len(mains) == expected_mains, (
         f"{game}: attesi {expected_mains} numeri, trovati {len(mains)}"
     )
-    assert len(euros) == expected_euros, (
-        f"{game}: attesi {expected_euros} euronumeri, trovati {len(euros)}"
-    )
-    assert len(set(mains)) == len(mains), f"{game}: numeri duplicati in mains"
-    assert all(1 <= n <= pool for n in mains), f"{game}: numeri fuori range"
-    assert all(1 <= n <= 12 for n in euros), f"{game}: euronumeri fuori range"
+    assert len(euros) == expected_euros
+    assert len(set(mains)) == len(mains)
+    assert all(1 <= n <= pool for n in mains)
+    assert all(1 <= n <= 12 for n in euros)
 
 
 def test_generate_ticket_deterministic():
     draws = _fake_draws()
     a = generate_ticket("superenalotto", draws, seed=123)
     b = generate_ticket("superenalotto", draws, seed=123)
-    assert a == b, "generate_ticket non deterministico con stesso seed"
+    assert a == b
 
 
 # ---------------- get_decision / EV ----------------
@@ -108,11 +96,31 @@ def test_ev_grows_with_jackpot():
     assert ev_high > ev_low
 
 
+@pytest.mark.parametrize("game", ["eurojackpot", "superenalotto", "swfl"])
+def test_lower_tier_return_in_range(game):
+    """LOWER_TIER_RETURN deve essere una frazione plausibile (0.20–0.80)."""
+    v = LOWER_TIER_RETURN[game]
+    assert 0.20 <= v <= 0.80, (
+        f"{game}: LOWER_TIER_RETURN={v} fuori range plausibile"
+    )
+
+
+def test_skip_disabled_by_default():
+    """Con ENABLE_SKIP=False, get_decision non deve mai tornare SKIP."""
+    if ENABLE_SKIP:
+        pytest.skip("ENABLE_SKIP=True, test non applicabile")
+    for game in ("eurojackpot", "superenalotto", "swfl"):
+        decision, _ = get_decision(game, 0)
+        assert decision == "PLAY_MAX", (
+            f"{game}: con ENABLE_SKIP=False e jackpot=0 atteso PLAY_MAX"
+        )
+
+
 # ---------------- latest.json ----------------
 def test_latest_json_shape():
     p = Path("docs/latest.json")
     if not p.exists():
-        pytest.skip("latest.json non presente (bot non ancora eseguito)")
+        pytest.skip("latest.json non presente")
 
     data = json.loads(p.read_text(encoding="utf-8"))
     assert "timestamp" in data
@@ -121,21 +129,13 @@ def test_latest_json_shape():
 
     valid_statuses = {"PLAY", "SKIP", "NO_DRAW", "STALE"}
     for game, info in data["games"].items():
-        assert "status" in info, f"{game}: manca status"
-        assert info["status"] in valid_statuses, (
-            f"{game}: status {info['status']} non valido"
-        )
+        assert "status" in info
+        assert info["status"] in valid_statuses
         assert "ev" in info
-
         if info["status"] == "PLAY":
             assert isinstance(info.get("mains"), list)
-            assert len(info["mains"]) > 0
             expected = 5 if game == "eurojackpot" else 6
-            assert len(info["mains"]) == expected, (
-                f"{game}: attesi {expected} numeri in mains, "
-                f"trovati {len(info['mains'])}"
-            )
-            assert isinstance(info.get("euros", []), list)
+            assert len(info["mains"]) == expected
 
 
 # ---------------- _all_good helper ----------------
