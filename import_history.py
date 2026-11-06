@@ -21,22 +21,20 @@ SWFL_CSV = Path("swfl_storico.csv")
 EJ_DATE_REGEX = re.compile(r"^\d{2}\.\d{2}\.\d{4}$")
 
 
-def db_is_populated() -> bool:
-    """True se omega.db esiste e ha almeno una riga in una tabella."""
+def table_count(table: str) -> int:
+    """Numero di righe in una tabella (0 se DB o tabella assenti)."""
     if not DB_PATH.exists():
-        return False
+        return 0
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            for table in ("ej", "se", "vv"):
-                try:
-                    count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                    if count > 0:
-                        return True
-                except sqlite3.OperationalError:
-                    continue
-    except Exception:
-        return False
-    return False
+            return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
+        return 0
+
+
+def db_is_populated() -> bool:
+    """True se TUTTE e tre le tabelle hanno almeno una riga."""
+    return table_count("ej") > 0 and table_count("se") > 0 and table_count("vv") > 0
 
 
 def _detect_format(path: Path) -> str:
@@ -253,15 +251,33 @@ def import_swfl_csv() -> int:
 if __name__ == "__main__":
     init_db()
 
-    if db_is_populated():
-        print("[SKIP] omega.db già popolato, salto import CSV.")
+    ej_count = table_count("ej")
+    se_count = table_count("se")
+    vv_count = table_count("vv")
+
+    print(f"[DB] Stato attuale: EJ={ej_count}, SE={se_count}, SWFL={vv_count}")
+
+    if ej_count > 0 and se_count > 0 and vv_count > 0:
+        print("[SKIP] omega.db già popolato su tutte le tabelle, salto import CSV.")
     else:
         print("=" * 62)
-        print(" DB vuoto: importo storico dai CSV")
+        print(" Import mirato: solo le tabelle vuote")
         print("=" * 62)
-        import_eurojackpot_csv()
-        import_superenalotto_csv()
-        import_swfl_csv()
+
+        if ej_count == 0:
+            import_eurojackpot_csv()
+        else:
+            print(f"[EJ] Già {ej_count} righe, salto import.")
+
+        if se_count == 0:
+            import_superenalotto_csv()
+        else:
+            print(f"[SE] Già {se_count} righe, salto import.")
+
+        if vv_count == 0:
+            import_swfl_csv()
+        else:
+            print(f"[SWFL] Già {vv_count} righe, salto import.")
 
     print("=" * 62)
     with sqlite3.connect(DB_PATH) as conn:
