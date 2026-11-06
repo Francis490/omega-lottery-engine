@@ -135,7 +135,7 @@ def fetch_superenalotto() -> bool:
 
 
 def fetch_vinci() -> bool:
-    # Usiamo Lottologia anche per SWFL, è molto più stabile di Agimeg
+    # Usiamo Lottologia, ma cerchiamo la tabella HTML invece del testo
     try:
         res = requests.get(
             "https://www.lottologia.com/super-win-for-life/estrazioni/",
@@ -144,41 +144,48 @@ def fetch_vinci() -> bool:
         )
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "lxml")
-        text = soup.get_text(" ", strip=True)
-
-        # Cerca la data
-        draw_date = _parse_italian_date(text)
-        if not draw_date:
-            logger.warning("SWFL: data non trovata.")
-            return False
-
-        # Cerca gli 8 numeri. Lottologia di solito li mostra in sequenza
-        # Cerchiamo un blocco di 8 numeri separati da spazi o virgole
-        match = re.search(
-            r"(?:Numeri|combinazione|estratti)[^0-9]*((?:\d{1,2}[\s,]+){7}\d{1,2})",
-            text,
-            re.IGNORECASE,
-        )
         
-        # Fallback: se non trova la parola chiave, cerca semplicemente 8 numeri consecutivi
-        if not match:
-            match = re.search(r"((?:\d{1,2}[\s,]+){7}\d{1,2})", text)
-
-        if not match:
-            logger.warning("SWFL: numeri non trovati.")
+        # Trova la tabella che contiene "Data" o "Concorso"
+        table = None
+        for t in soup.find_all("table"):
+            if "Data" in t.get_text() or "Concorso" in t.get_text():
+                table = t
+                break
+                
+        if not table:
+            logger.warning("SWFL: Tabella non trovata su Lottologia.")
             return False
-
-        nums = [int(n) for n in re.split(r"[\s,]+", match.group(1).strip())]
+            
+        rows = table.find_all("tr")
+        if len(rows) < 2:
+            logger.warning("SWFL: Righe insufficienti nella tabella.")
+            return False
+            
+        # La riga 1 (dopo l'header) è l'estrazione più recente
+        row_text = rows[1].get_text(" ", strip=True)
         
-        # Validazione
-        if (
-            len(nums) != 8
-            or len(set(nums)) != 8
-            or any(not (1 <= n <= 90) for n in nums)
-        ):
-            logger.warning(f"SWFL: numeri non validi: {nums}")
+        # Estrai la data (cerca un formato dd/mm/yyyy)
+        date_match = re.search(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})", row_text)
+        if not date_match:
+            logger.warning("SWFL: Data non trovata nella riga.")
             return False
-
+            
+        d, m, y = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
+        draw_date = datetime(y, m, d).date()
+        
+        # Estrai gli 8 numeri validi (da 1 a 90)
+        all_nums = [int(n) for n in re.findall(r"\b\d{1,2}\b", row_text)]
+        valid_nums = []
+        for n in all_nums:
+            if 1 <= n <= 90 and n not in valid_nums:
+                valid_nums.append(n)
+                
+        if len(valid_nums) < 8:
+            logger.warning(f"SWFL: trovati solo {len(valid_nums)} numeri validi: {valid_nums}")
+            return False
+            
+        nums = valid_nums[:8]
+        
         draw = VinciDraw(draw_date=draw_date, mains=nums)
         save_vv(draw)
         logger.info(f"SWFL OK: {nums} ({draw_date})")
