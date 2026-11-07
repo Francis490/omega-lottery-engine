@@ -21,9 +21,9 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 DRAW_DAYS = {
-    "eurojackpot": [1, 4],           # Mar, Ven
-    "superenalotto": [1, 3, 4, 5],   # Mar, Gio, Ven, Sab
-    "swfl": [0, 1, 2, 3, 4, 5, 6],   # Ogni giorno
+    "eurojackpot": [1, 4],
+    "superenalotto": [1, 3, 4, 5],
+    "swfl": [0, 1, 2, 3, 4, 5, 6],
 }
 
 DISPLAY_NAMES = {
@@ -62,7 +62,6 @@ def send_telegram(msg):
         except Exception as e:
             logging.error(f"Errore invio Telegram: {e}")
 
-
 def _latest_draw_age_days(game: str) -> int:
     try:
         recent = get_recent(game, limit=1)
@@ -74,17 +73,13 @@ def _latest_draw_age_days(game: str) -> int:
     except Exception:
         return 9999
 
-
 def _is_fresh_enough(game: str) -> bool:
     age = _latest_draw_age_days(game)
     limit = MAX_STALENESS_DAYS[game]
     if age > limit:
-        logging.warning(
-            f"{game}: ultimo dato troppo vecchio ({age} giorni fa, max {limit})."
-        )
+        logging.warning(f"{game}: ultimo dato troppo vecchio ({age} giorni fa, max {limit}).")
         return False
     return True
-
 
 def _all_good(data: dict) -> bool:
     games = data.get("games", {})
@@ -95,27 +90,18 @@ def _all_good(data: dict) -> bool:
 
 def run():
     logging.info("Avvio Omega Engine...")
-
     now = datetime.now(ZoneInfo("Europe/Rome"))
     oggi = now.weekday()
     today_str = now.strftime("%Y-%m-%d")
-    day_names = [
-        "Lunedì", "Martedì", "Mercoledì", "Giovedì",
-        "Venerdì", "Sabato", "Domenica",
-    ]
-
+    day_names = ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"]
     pwa_path = Path("docs/latest.json")
 
-    # --- DAILY LOCK ---
     if pwa_path.exists():
         try:
             with open(pwa_path, "r") as f:
                 existing_data = json.load(f)
 
-            if (
-                existing_data.get("timestamp", "").startswith(today_str)
-                and _all_good(existing_data)
-            ):
+            if existing_data.get("timestamp", "").startswith(today_str) and _all_good(existing_data):
                 logging.info("Sestina già generata oggi. Invio promemoria.")
                 report = (
                     f"🧠 *OMEGA ENGINE* 🧠\n"
@@ -130,24 +116,17 @@ def run():
                         num_str = "-".join(map(str, info["mains"]))
                         if info.get("euros"):
                             num_str += "  |  ⭐ " + "-".join(map(str, info["euros"]))
-                        report += f"🎯 *{nome_gioco}*\n"
-                        report += f"🎰 `{num_str}`\n"
-                        report += f"📈 EV: {info.get('ev', 0):.2f}€\n\n"
-                
+                        report += f"🎯 *{nome_gioco}*\n🎰 `{num_str}`\n📈 EV: {info.get('ev', 0):.2f}€\n\n"
                 if has_play:
                     report += FOOTER_DISCLAIMER
                     send_telegram(report)
                 return
             else:
-                logging.info(
-                    "Dati di oggi presenti ma non tutti validi (STALE). Rigenero."
-                )
+                logging.info("Dati di oggi presenti ma non tutti validi (STALE). Rigenero.")
         except Exception as e:
             logging.error(f"Errore lettura latest.json: {e}")
 
-    # --- FETCH PHASE ---
     init_db()
-
     logging.info("Recupero ultime estrazioni...")
     fetched_ok = {
         "eurojackpot": fetch_eurojackpot(),
@@ -159,12 +138,7 @@ def run():
     logging.info("Recupero jackpot in corso...")
     jackpots = get_all_jackpots()
 
-    # --- GENERATION PHASE ---
-    report = (
-        f"🧠 *OMEGA ENGINE* 🧠\n"
-        f"📅 *{day_names[oggi]} {now.strftime('%d/%m/%Y')}*\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-    )
+    report = f"🧠 *OMEGA ENGINE* 🧠\n📅 *{day_names[oggi]} {now.strftime('%d/%m/%Y')}*\n━━━━━━━━━━━━━━━━━━\n\n"
     pwa_data = {"timestamp": now.strftime("%Y-%m-%d %H:%M:%S"), "games": {}}
     giocate_oggi = 0
 
@@ -179,9 +153,6 @@ def run():
             report += f"⚠️ *{nome_gioco}* — Dati non aggiornati, salto.\n\n"
             pwa_data["games"][game] = {"status": "STALE", "ev": 0}
             continue
-
-        if not fetched_ok[game]:
-            logging.warning(f"{game}: fetch fallito, uso dati recenti dal DB.")
 
         decision, ev = get_decision(game, jackpot)
 
@@ -198,20 +169,11 @@ def run():
         if euros:
             num_str += "  |  ⭐ " + "-".join(map(str, euros))
 
-        report += f"🎯 *{nome_gioco}*\n"
-        report += f"🎰 `{num_str}`\n"
-        report += f"📈 EV: {ev:.2f}€\n\n"
-        
-        pwa_data["games"][game] = {
-            "status": "PLAY",
-            "ev": round(ev, 4),
-            "mains": mains,
-            "euros": euros,
-        }
+        report += f"🎯 *{nome_gioco}*\n🎰 `{num_str}`\n📈 EV: {ev:.2f}€\n\n"
+        pwa_data["games"][game] = {"status": "PLAY", "ev": round(ev, 4), "mains": mains, "euros": euros}
 
     if giocate_oggi == 0:
         report += "Nessuna giocata attiva oggi.\n"
-    
     report += FOOTER_DISCLAIMER
 
     Path("docs").mkdir(exist_ok=True)
@@ -220,7 +182,6 @@ def run():
 
     send_telegram(report)
     logging.info("Ciclo Omega completato con successo.")
-
 
 if __name__ == "__main__":
     run()
