@@ -13,12 +13,13 @@ def init_db():
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS se "
-            "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT)"
+            "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT, jolly INT, superstar INT)"
         )
         conn.execute(
             "CREATE TABLE IF NOT EXISTS vv "
             "(date TEXT PRIMARY KEY, n1 INT, n2 INT, n3 INT, n4 INT, n5 INT, n6 INT, n7 INT, n8 INT)"
         )
+        # Assicuriamoci che le colonne esistano per DB creati in precedenza
         for col in ("jolly", "superstar"):
             try:
                 conn.execute(f"ALTER TABLE se ADD COLUMN {col} INT")
@@ -29,7 +30,11 @@ def init_db():
 def save_ej(draw: EurojackpotDraw):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO ej VALUES (?,?,?,?,?,?,?,?)",
+            """INSERT INTO ej (date, n1, n2, n3, n4, n5, e1, e2)
+               VALUES (?,?,?,?,?,?,?,?)
+               ON CONFLICT(date) DO UPDATE SET
+               n1=excluded.n1, n2=excluded.n2, n3=excluded.n3,
+               n4=excluded.n4, n5=excluded.n5, e1=excluded.e1, e2=excluded.e2""",
             (draw.draw_date.isoformat(), *draw.mains, *draw.euros),
         )
         conn.commit()
@@ -37,22 +42,26 @@ def save_ej(draw: EurojackpotDraw):
 def save_se(draw: SuperenalottoDraw):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO se (date, n1, n2, n3, n4, n5, n6, jolly, superstar) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            """INSERT INTO se (date, n1, n2, n3, n4, n5, n6, jolly, superstar)
+               VALUES (?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(date) DO UPDATE SET
+               n1=excluded.n1, n2=excluded.n2, n3=excluded.n3,
+               n4=excluded.n4, n5=excluded.n5, n6=excluded.n6,
+               jolly=COALESCE(excluded.jolly, se.jolly),
+               superstar=COALESCE(excluded.superstar, se.superstar)""",
             (draw.draw_date.isoformat(), *draw.mains, draw.jolly, draw.superstar),
         )
-        if draw.jolly is not None or draw.superstar is not None:
-            conn.execute(
-                "UPDATE se SET jolly = COALESCE(jolly, ?), superstar = COALESCE(superstar, ?) "
-                "WHERE date = ?",
-                (draw.jolly, draw.superstar, draw.draw_date.isoformat()),
-            )
         conn.commit()
 
 def save_vv(draw: VinciDraw):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO vv VALUES (?,?,?,?,?,?,?,?,?)",
+            """INSERT INTO vv (date, n1, n2, n3, n4, n5, n6, n7, n8)
+               VALUES (?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(date) DO UPDATE SET
+               n1=excluded.n1, n2=excluded.n2, n3=excluded.n3,
+               n4=excluded.n4, n5=excluded.n5, n6=excluded.n6,
+               n7=excluded.n7, n8=excluded.n8""",
             (draw.draw_date.isoformat(), *draw.mains),
         )
         conn.commit()
