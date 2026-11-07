@@ -134,7 +134,17 @@ def fetch_superenalotto() -> bool:
 
 
 def fetch_vinci() -> bool:
-    # Torna a Agimeg. Prende tutti i numeri, filtra 1-90, ne prende 8.
+    """
+    Fetch SWFL da Agimeg (brute-force robusto).
+
+    Regole di sicurezza:
+    - La data viene estratta PRIMA di rimuovere date/anni/orari dal testo,
+      altrimenti i numeri della data finiscono tra gli "estratti".
+    - Cerchiamo solo sequenze consecutive di 8 numeri unici 1-90.
+    - Se non troviamo una sequenza valida, NON salviamo: meglio nessun dato
+      che un dato sbagliato (con INSERT OR REPLACE il record verrà corretto
+      al prossimo fetch riuscito).
+    """
     try:
         res = requests.get(
             "https://www.agimeg.it/wp-json/wp/v2/posts?categories=1031",
@@ -149,33 +159,49 @@ def fetch_vinci() -> bool:
             return False
 
         latest = posts[0]
-        content = BeautifulSoup(latest["content"]["rendered"], "lxml").get_text(" ", strip=True)
+        content = BeautifulSoup(
+            latest["content"]["rendered"], "lxml"
+        ).get_text(" ", strip=True)
 
-        # Estrazione brutale: prendi tutti i numeri da 1 a 2 cifre
-        potential_nums = re.findall(r"\b\d{1,2}\b", content)
-        
-        valid_nums = []
-        for n in potential_nums:
-            num = int(n)
-            if 1 <= num <= 90 and num not in valid_nums:
-                valid_nums.append(num)
-                
-        if len(valid_nums) < 8:
-            logger.warning(f"SWFL: trovati solo {len(valid_nums)} numeri validi nel post.")
-            return False
-            
-        # Prende i primi 8 numeri validi
-        nums = valid_nums[:8]
-
-        # Prova a estrarre la data dal testo, altrimenti usa quella del post
+        # 1) Data PRIMA del cleanup
         draw_date = _parse_italian_date(content)
         if not draw_date:
-            draw_date = datetime.strptime(latest["date"][:10], "%Y-%m-%d").date()
-            
-        draw = VinciDraw(draw_date=draw_date, mains=nums)
-        save_vv(draw)
-        logger.info(f"SWFL OK (Agimeg brute-force): {nums} ({draw_date})")
-        return True
+            try:
+                draw_date = datetime.strptime(
+                    latest["date"][:10], "%Y-%m-%d"
+                ).date()
+            except (KeyError, ValueError):
+                logger.warning("SWFL: data non determinabile.")
+                return False
+
+        # 2) Cleanup: rimuovi date, anni, orari
+        cleaned = content
+        cleaned = re.sub(DATE_MONTH_REGEX, " ", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b\d{4}\b", " ", cleaned)  # anni
+        cleaned = re.sub(
+            r"\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b", " ", cleaned
+        )  # date numeriche
+        cleaned = re.sub(r"\b\d{1,2}[:.]\d{2}\b", " ", cleaned)  # orari
+
+        # 3) Cerca SOLO sequenze consecutive di 8 numeri
+        seq_pattern = re.compile(
+            r"(?:\b\d{1,2}\b[\s,;|/\-]+){7}\b\d{1,2}\b"
+        )
+
+        for seq_text in seq_pattern.findall(cleaned):
+            nums = [int(n) for n in re.findall(r"\b\d{1,2}\b", seq_text)]
+            if (
+                len(nums) == 8
+                and len(set(nums)) == 8
+                and all(1 <= n <= 90 for n in nums)
+            ):
+                draw = VinciDraw(draw_date=draw_date, mains=nums)
+                save_vv(draw)
+                logger.info(f"SWFL OK: {nums} ({draw_date})")
+                return True
+
+        logger.warning("SWFL: nessuna sequenza valida di 8 numeri unici 1-90.")
+        return False
     except Exception as e:
         logger.error(f"Errore Fetch SWFL: {e}")
         return False
