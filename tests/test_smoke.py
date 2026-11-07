@@ -34,7 +34,6 @@ def _fake_draws(n=30, pool=90, seed=0):
     return out
 
 
-# ---------------- Models ----------------
 def test_eurojackpot_model_cardinality():
     d = EurojackpotDraw(draw_date="2026-11-06", mains=[1, 2, 3, 4, 5], euros=[1, 2])
     assert len(d.mains) == 5
@@ -51,7 +50,6 @@ def test_vinci_model_cardinality():
     assert len(d.mains) == 8
 
 
-# ---------------- generate_ticket ----------------
 @pytest.mark.parametrize(
     "game, expected_mains, expected_euros",
     [
@@ -65,9 +63,7 @@ def test_generate_ticket_cardinality(game, expected_mains, expected_euros):
     draws = _fake_draws(pool=pool)
     mains, euros = generate_ticket(game, draws, seed=42)
 
-    assert len(mains) == expected_mains, (
-        f"{game}: attesi {expected_mains} numeri, trovati {len(mains)}"
-    )
+    assert len(mains) == expected_mains
     assert len(euros) == expected_euros
     assert len(set(mains)) == len(mains)
     assert all(1 <= n <= pool for n in mains)
@@ -81,7 +77,6 @@ def test_generate_ticket_deterministic():
     assert a == b
 
 
-# ---------------- get_decision / EV ----------------
 @pytest.mark.parametrize("game", ["eurojackpot", "superenalotto", "swfl"])
 def test_decision_valid(game):
     decision, ev = get_decision(game, 50_000_000)
@@ -98,25 +93,18 @@ def test_ev_grows_with_jackpot():
 
 @pytest.mark.parametrize("game", ["eurojackpot", "superenalotto", "swfl"])
 def test_lower_tier_return_in_range(game):
-    """LOWER_TIER_RETURN deve essere una frazione plausibile (0.20–0.80)."""
     v = LOWER_TIER_RETURN[game]
-    assert 0.20 <= v <= 0.80, (
-        f"{game}: LOWER_TIER_RETURN={v} fuori range plausibile"
-    )
+    assert 0.20 <= v <= 0.80
 
 
 def test_skip_disabled_by_default():
-    """Con ENABLE_SKIP=False, get_decision non deve mai tornare SKIP."""
     if ENABLE_SKIP:
         pytest.skip("ENABLE_SKIP=True, test non applicabile")
     for game in ("eurojackpot", "superenalotto", "swfl"):
         decision, _ = get_decision(game, 0)
-        assert decision == "PLAY_MAX", (
-            f"{game}: con ENABLE_SKIP=False e jackpot=0 atteso PLAY_MAX"
-        )
+        assert decision == "PLAY_MAX"
 
 
-# ---------------- latest.json ----------------
 def test_latest_json_shape():
     p = Path("docs/latest.json")
     if not p.exists():
@@ -138,7 +126,6 @@ def test_latest_json_shape():
             assert len(info["mains"]) == expected
 
 
-# ---------------- _all_good helper ----------------
 def test_all_good_helper():
     from main import _all_good
 
