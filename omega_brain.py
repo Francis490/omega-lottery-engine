@@ -27,6 +27,7 @@ LOWER_TIER_RETURN = {
 ENABLE_SKIP = False
 SKIP_THRESHOLD = 0.60
 
+
 def get_decision(game, jackpot):
     config = GAMES.get(game)
     if config is None:
@@ -42,6 +43,7 @@ def get_decision(game, jackpot):
         return "SKIP", ev_total
     return "PLAY_MAX", ev_total
 
+
 def _find_broken_numbers(recent_draws, max_pool, top_n=3):
     """
     Hacker Mode: Trova i numeri statisticamente più 'rotti' (Z-Score alto).
@@ -49,29 +51,26 @@ def _find_broken_numbers(recent_draws, max_pool, top_n=3):
     """
     freq = Counter()
     total_extracted = 0
-    
+
     for d in recent_draws:
         for k, v in d.items():
             if k.startswith("n") and v:
                 freq[v] += 1
                 total_extracted += 1
-                
+
     if total_extracted == 0:
         return []
 
     expected = total_extracted / max_pool
     std_dev = math.sqrt(expected * (1 - (1 / max_pool)))
-    
+
     z_scores = {}
     for n in range(1, max_pool + 1):
         uscite = freq.get(n, 0)
         z = (uscite - expected) / std_dev if std_dev > 0 else 0
         z_scores[n] = z
-        
-    # Prendi i numeri con il valore assoluto dello Z-score più alto (sia caldi che freddi estremi)
+
     sorted_anomalies = sorted(z_scores.items(), key=lambda x: abs(x[1]), reverse=True)
-    
-    # Ritorna solo i numeri che superano una soglia di anomalia (es. Z-Score > 2.0)
     broken = [num for num, z in sorted_anomalies if abs(z) > 2.0][:top_n]
     return broken
 
@@ -119,87 +118,85 @@ def generate_ticket(game, recent_draws, seed=None):
     num_to_pick = GAMES[game]["mains"]
     all_nums = list(range(1, max_pool + 1))
 
-    # 1. SCOPRI LE ANOMALIE (Hacker Mode)
+    # 1. Hacker Mode
     broken_nums = _find_broken_numbers(recent_draws, max_pool, top_n=3)
-    
-    # 2. MODALITÀ CAOS (20% di probabilità)
-    # A volte l'unico modo per fottere un sistema è giocare in modo totalmente illogico
-    chaos_mode = rng.random() < 0.20
 
+    # 2. Decisioni UNA VOLTA FUORI dal loop (fix B4)
+    chaos_mode = rng.random() < 0.20
+    use_broken = bool(broken_nums) and (chaos_mode or rng.random() < 0.5)
+
+    # 3. Statistiche precalcolate FUORI dal loop (fix perf)
+    freq = Counter()
+    last_seen = {}
+    for i, d in enumerate(recent_draws):
+        for k, v in d.items():
+            if k.startswith("n") and v:
+                freq[v] += 1
+                if v not in last_seen:
+                    last_seen[v] = i
+
+    hot_nums = [n for n, _ in freq.most_common()]
+    cold_nums = sorted(
+        all_nums,
+        key=lambda n: last_seen.get(n, len(recent_draws)),
+        reverse=True,
+    )
+
+    # 4. Generazione
     best_mains = None
     fallback_mains = None
-    attempts = 0
-    max_attempts = 50000
 
-    while attempts < max_attempts:
-        attempts += 1
-        
-        # Se c'è un'anomalia o siamo in modalità caos, ignoriamo i filtri
-        ignore_filters = chaos_mode or (len(broken_nums) > 0 and rng.random() < 0.5)
-
-        if ignore_filters and broken_nums:
-            # Gioca i numeri rotti, ignora il resto dei filtri
-            picks = list(broken_nums)
-            while len(picks) < num_to_pick:
-                n = rng.choice(all_nums)
-                if n not in picks:
-                    picks.append(n)
-            mains = sorted(picks[:num_to_pick])
-            
-            # In modalità caos o anomalia, accettiamo la sestina senza filtri
-            best_mains = mains
-            break
-            
-        else:
-            # Modalità normale (Statistica + Filtri)
-            freq = Counter()
-            last_seen = {}
-            for i, d in enumerate(recent_draws):
-                for k, v in d.items():
-                    if k.startswith("n") and v:
-                        freq[v] += 1
-                        if v not in last_seen: last_seen[v] = i
-
-            hot_nums = [n for n, _ in freq.most_common()]
-            cold_nums = sorted(all_nums, key=lambda n: last_seen.get(n, len(recent_draws)), reverse=True)
-
+    if use_broken:
+        # Gioca i numeri rotti ignorando i filtri
+        picks = list(broken_nums)
+        while len(picks) < num_to_pick:
+            n = rng.choice(all_nums)
+            if n not in picks:
+                picks.append(n)
+        best_mains = sorted(picks[:num_to_pick])
+    else:
+        attempts = 0
+        max_attempts = 50000
+        while attempts < max_attempts:
+            attempts += 1
             picks = []
             if hot_nums and cold_nums:
                 picks.extend(rng.sample(hot_nums[:10], min(2, len(hot_nums))))
                 cold_candidates = [n for n in cold_nums if n not in picks]
                 picks.extend(rng.sample(cold_candidates, min(2, len(cold_candidates))))
-
             while len(picks) < num_to_pick:
                 n = rng.choice(all_nums)
                 if n not in picks:
                     picks.append(n)
-
             mains = sorted(picks[:num_to_pick])
-
             if fallback_mains is None:
                 fallback_mains = mains
-
             if _passes_filters(mains, is_ej, num_to_pick):
                 best_mains = mains
                 break
+        if best_mains is None:
+            best_mains = fallback_mains or sorted(rng.sample(all_nums, num_to_pick))
 
-    if best_mains is None:
-        best_mains = fallback_mains or sorted(rng.sample(all_nums, num_to_pick))
-
-    # Gestione Euronumeri
+    # Gestione Euronumeri (invariato)
     if is_ej:
         euro_freq = Counter()
         euro_last_seen = {}
         for i, d in enumerate(recent_draws):
             if d.get("e1"):
                 euro_freq[d["e1"]] += 1
-                if d["e1"] not in euro_last_seen: euro_last_seen[d["e1"]] = i
+                if d["e1"] not in euro_last_seen:
+                    euro_last_seen[d["e1"]] = i
             if d.get("e2"):
                 euro_freq[d["e2"]] += 1
-                if d["e2"] not in euro_last_seen: euro_last_seen[d["e2"]] = i
+                if d["e2"] not in euro_last_seen:
+                    euro_last_seen[d["e2"]] = i
 
         euro_hot = [n for n, _ in euro_freq.most_common() if n <= 12]
-        euro_cold = sorted(list(range(1, 13)), key=lambda n: euro_last_seen.get(n, len(recent_draws)), reverse=True)
+        euro_cold = sorted(
+            list(range(1, 13)),
+            key=lambda n: euro_last_seen.get(n, len(recent_draws)),
+            reverse=True,
+        )
 
         if euro_hot and euro_cold:
             e_hot_pick = rng.choice(euro_hot[:5])
