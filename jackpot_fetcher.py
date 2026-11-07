@@ -6,6 +6,8 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
 DEFAULT_JACKPOTS = {
     "eurojackpot": 30_000_000,
     "superenalotto": 40_000_000,
@@ -17,12 +19,13 @@ def _parse_money(s):
     """
     Converte una stringa monetaria in intero euro.
     Supporta: "30.000.000", "30.000.000,00", "30000000", "30,000,000.00".
+    Gestisce anche decimali con 1-2 cifre: "1.5" -> 1, "1,5" -> 1.
     """
     s = str(s).strip()
     if not s:
         return 0
-    if re.search(r",\d{1,2}$", s):
-        s = re.sub(r",\d{1,2}$", "", s)
+    if re.search(r"[.,]\d{1,2}$", s):
+        s = re.sub(r"[.,]\d{1,2}$", "", s)
         s = s.replace(".", "").replace(",", "")
     else:
         s = re.sub(r"[^\d]", "", s)
@@ -34,6 +37,7 @@ def fetch_eurojackpot_jackpot():
         res = requests.get(
             "https://www.multipasko.pl/widget-wyniki.php?format=json",
             timeout=15,
+            headers=HEADERS,
         )
         data = res.json()
         jackpot_str = data.get("g", {}).get("eurojackpot", {}).get("j")
@@ -52,6 +56,7 @@ def fetch_superenalotto_jackpot():
         res = requests.get(
             "https://www.lottologia.com/superenalotto/estrazioni/",
             timeout=15,
+            headers=HEADERS,
         )
         soup = BeautifulSoup(res.text, "lxml")
         text = soup.get_text(" ", strip=True)
@@ -71,6 +76,7 @@ def fetch_vinci_jackpot():
         res = requests.get(
             "https://www.agimeg.it/wp-json/wp/v2/posts?categories=1031",
             timeout=15,
+            headers=HEADERS,
         )
         posts = res.json()
         if posts:
