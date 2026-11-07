@@ -38,6 +38,12 @@ MAX_STALENESS_DAYS = {
     "swfl": 2,
 }
 
+FOOTER_DISCLAIMER = (
+    "━━━━━━━━━━━━━━━━━━\n"
+    "⚠️ *Avviso*: Il gioco è vietato ai minori e può causare dipendenza. "
+    "Le probabilità di vincita sono basse. Gioca responsabilmente.\n"
+    "🤖 _Generato da Omega Engine_"
+)
 
 def send_telegram(msg):
     if TOKEN and CHAT_ID:
@@ -45,7 +51,12 @@ def send_telegram(msg):
             url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
             requests.post(
                 url,
-                json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"},
+                json={
+                    "chat_id": CHAT_ID, 
+                    "text": msg, 
+                    "parse_mode": "Markdown",
+                    "disable_web_page_preview": True
+                },
                 timeout=10,
             )
         except Exception as e:
@@ -107,17 +118,24 @@ def run():
             ):
                 logging.info("Sestina già generata oggi. Invio promemoria.")
                 report = (
-                    f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}* "
-                    f"(Promemoria)\n\n"
+                    f"🧠 *OMEGA ENGINE* 🧠\n"
+                    f"📅 *{day_names[oggi]} {now.strftime('%d/%m/%Y')}* (Promemoria)\n"
+                    f"━━━━━━━━━━━━━━━━━━\n\n"
                 )
+                has_play = False
                 for game, info in existing_data.get("games", {}).items():
                     if info.get("status") == "PLAY":
+                        has_play = True
                         nome_gioco = DISPLAY_NAMES.get(game, game.upper())
                         num_str = "-".join(map(str, info["mains"]))
                         if info.get("euros"):
                             num_str += "  |  ⭐ " + "-".join(map(str, info["euros"]))
-                        report += f"✅ *{nome_gioco}*\n🎯 `{num_str}`\n\n"
-                if not report.endswith("(Promemoria)\n\n"):
+                        report += f"🎯 *{nome_gioco}*\n"
+                        report += f"🎰 `{num_str}`\n"
+                        report += f"📈 EV: {info.get('ev', 0):.2f}€\n\n"
+                
+                if has_play:
+                    report += FOOTER_DISCLAIMER
                     send_telegram(report)
                 return
             else:
@@ -142,7 +160,11 @@ def run():
     jackpots = get_all_jackpots()
 
     # --- GENERATION PHASE ---
-    report = f"🧠 *OMEGA ENGINE - {day_names[oggi].upper()}*\n\n"
+    report = (
+        f"🧠 *OMEGA ENGINE* 🧠\n"
+        f"📅 *{day_names[oggi]} {now.strftime('%d/%m/%Y')}*\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+    )
     pwa_data = {"timestamp": now.strftime("%Y-%m-%d %H:%M:%S"), "games": {}}
     giocate_oggi = 0
 
@@ -154,7 +176,7 @@ def run():
             continue
 
         if not _is_fresh_enough(game):
-            report += f"⚠️ *{nome_gioco}* — dati non aggiornati, salto.\n\n"
+            report += f"⚠️ *{nome_gioco}* — Dati non aggiornati, salto.\n\n"
             pwa_data["games"][game] = {"status": "STALE", "ev": 0}
             continue
 
@@ -164,7 +186,7 @@ def run():
         decision, ev = get_decision(game, jackpot)
 
         if decision == "SKIP":
-            report += f"🛑 *{nome_gioco}* — SKIP (EV: {ev:.2f}€)\n\n"
+            report += f"🛑 *{nome_gioco}* — SKIP (EV troppo basso: {ev:.2f}€)\n\n"
             pwa_data["games"][game] = {"status": "SKIP", "ev": round(ev, 4)}
             continue
 
@@ -176,7 +198,10 @@ def run():
         if euros:
             num_str += "  |  ⭐ " + "-".join(map(str, euros))
 
-        report += f"✅ *{nome_gioco}*\n🎯 `{num_str}`\n\n"
+        report += f"🎯 *{nome_gioco}*\n"
+        report += f"🎰 `{num_str}`\n"
+        report += f"📈 EV: {ev:.2f}€\n\n"
+        
         pwa_data["games"][game] = {
             "status": "PLAY",
             "ev": round(ev, 4),
@@ -185,7 +210,9 @@ def run():
         }
 
     if giocate_oggi == 0:
-        report += "Nessuna giocata attiva oggi."
+        report += "Nessuna giocata attiva oggi.\n"
+    
+    report += FOOTER_DISCLAIMER
 
     Path("docs").mkdir(exist_ok=True)
     with open(pwa_path, "w") as f:
