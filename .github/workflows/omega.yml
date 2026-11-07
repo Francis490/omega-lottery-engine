@@ -31,13 +31,16 @@ jobs:
 
       - name: Scarica DB aggiornato da Release
         run: |
-          gh release download db-latest \
-            --pattern "omega.db" \
-            --output omega.db \
-            --clobber \
-            || echo "Nessun DB precedente, verrà ricostruito dai CSV"
+          if gh release view db-latest >/dev/null 2>&1; then
+            gh release download db-latest \
+              --pattern "omega.db" \
+              --output omega.db \
+              --clobber
+          else
+            echo "Release db-latest assente: il DB verrà ricostruito dai CSV"
+          fi
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Importa Storico Database (solo se DB assente o vuoto)
         run: python import_history.py
@@ -61,7 +64,7 @@ jobs:
         run: python export_csv.py
 
       - name: Pubblica DB aggiornato su Release
-        if: always()
+        if: success()
         run: |
           gh release view db-latest >/dev/null 2>&1 \
             || gh release create db-latest \
@@ -69,7 +72,7 @@ jobs:
                  --notes "Snapshot automatico del DB aggiornato ad ogni run"
           gh release upload db-latest omega.db --clobber
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
 
       - name: Commit per la PWA
         run: |
@@ -87,7 +90,7 @@ jobs:
 
           git commit -m "Aggiornamento Omega Engine [skip ci]"
 
-          git pull --rebase --autostash -X ours origin main
+          git pull --rebase --autostash -X theirs origin main
 
           for attempt in 1 2 3; do
             if git push; then
@@ -96,7 +99,7 @@ jobs:
             fi
             echo "Push fallito, retry $attempt/3..."
             sleep 5
-            git pull --rebase --autostash -X ours origin main
+            git pull --rebase --autostash -X theirs origin main
           done
 
           echo "Push fallito dopo 3 tentativi."
